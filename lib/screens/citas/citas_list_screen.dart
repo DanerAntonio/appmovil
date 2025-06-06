@@ -105,10 +105,9 @@ class _CitasListScreenState extends State<CitasListScreen> {
           _fechaFin.day,
         );
         
-        cumpleFecha = (fechaCita.isAtSameMomentAs(fechaInicioComparar) || 
-                       fechaCita.isAfter(fechaInicioComparar)) && 
-                      (fechaCita.isAtSameMomentAs(fechaFinComparar) || 
-                       fechaCita.isBefore(fechaFinComparar));
+        // CORRECCIÓN: Usar una comparación más simple y correcta que incluye el día actual
+        cumpleFecha = !fechaCita.isBefore(fechaInicioComparar) && 
+                      !fechaCita.isAfter(fechaFinComparar);
       } else {
         // Modo fecha específica
         final fechaCita = DateTime(
@@ -226,7 +225,7 @@ class _CitasListScreenState extends State<CitasListScreen> {
             Icon(Icons.pets, color: Colors.white, size: 24),
             SizedBox(width: 8),
             Text(
-              'Citas TeoCat',
+              'Citas',
               style: TextStyle(
                 fontWeight: FontWeight.w600,
                 color: Colors.white,

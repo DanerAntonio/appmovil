@@ -248,7 +248,7 @@ class _NotificacionesListScreenState extends State<NotificacionesListScreen> {
 
   Widget _buildFiltrosHeader() {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: const BoxDecoration(
         color: Colors.white,
         boxShadow: [
@@ -285,25 +285,19 @@ class _NotificacionesListScreenState extends State<NotificacionesListScreen> {
           ),
           const SizedBox(height: 16),
           // Filtros por estado
-          Row(
-            children: [
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _buildFiltroChip('Todas', _notificaciones.length),
-                      const SizedBox(width: 8),
-                      _buildFiltroChip('Pendientes', _notificaciones.where((n) => n.estado.toLowerCase() == 'pendiente').length),
-                      const SizedBox(width: 8),
-                      _buildFiltroChip('Leídas', _notificaciones.where((n) => n.estado.toLowerCase() == 'vista').length),
-                      const SizedBox(width: 8),
-                      _buildFiltroChip('Resueltas', _notificaciones.where((n) => n.estado.toLowerCase() == 'resuelta').length),
-                    ],
-                  ),
-                ),
-              ),
-            ],
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                _buildFiltroChip('Todas', _notificaciones.length),
+                const SizedBox(width: 8),
+                _buildFiltroChip('Pendientes', _notificaciones.where((n) => n.estado.toLowerCase() == 'pendiente').length),
+                const SizedBox(width: 8),
+                _buildFiltroChip('Leídas', _notificaciones.where((n) => n.estado.toLowerCase() == 'vista').length),
+                const SizedBox(width: 8),
+                _buildFiltroChip('Resueltas', _notificaciones.where((n) => n.estado.toLowerCase() == 'resuelta').length),
+              ],
+            ),
           ),
         ],
       ),
@@ -342,8 +336,8 @@ class _NotificacionesListScreenState extends State<NotificacionesListScreen> {
   Widget _buildErrorWidget() {
     return Center(
       child: Container(
-        margin: const EdgeInsets.all(32),
-        padding: const EdgeInsets.all(32),
+        margin: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -410,8 +404,8 @@ class _NotificacionesListScreenState extends State<NotificacionesListScreen> {
   Widget _buildEmptyWidget() {
     return Center(
       child: Container(
-        margin: const EdgeInsets.all(32),
-        padding: const EdgeInsets.all(32),
+        margin: const EdgeInsets.all(24),
+        padding: const EdgeInsets.all(24),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
@@ -484,7 +478,7 @@ class _NotificacionesListScreenState extends State<NotificacionesListScreen> {
       onRefresh: _loadNotificaciones,
       color: const Color.fromARGB(255, 76, 142, 147),
       child: ListView.builder(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         itemCount: _notificacionesFiltradas.length,
         itemBuilder: (context, index) {
           final notificacion = _notificacionesFiltradas[index];
@@ -496,25 +490,18 @@ class _NotificacionesListScreenState extends State<NotificacionesListScreen> {
 
   Widget _buildNotificacionCard(Notificacion notificacion) {
     final isPendiente = notificacion.estado.toLowerCase() == 'pendiente';
-    final isResuelta = notificacion.estado.toLowerCase() == 'resuelta';
     
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isPendiente 
-              ? notificacion.getPriorityColor().withOpacity(0.3)
-              : const Color(0xFFE2E8F0),
-          width: isPendiente ? 2 : 1,
-        ),
+        borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
             color: isPendiente 
                 ? notificacion.getPriorityColor().withOpacity(0.1)
-                : Colors.black.withOpacity(0.05),
-            blurRadius: 10,
+                : Colors.black.withOpacity(0.04),
+            blurRadius: 8,
             offset: const Offset(0, 2),
           ),
         ],
@@ -522,10 +509,10 @@ class _NotificacionesListScreenState extends State<NotificacionesListScreen> {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(12),
           onTap: () => _mostrarDetalleNotificacion(notificacion),
           child: Padding(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -533,18 +520,18 @@ class _NotificacionesListScreenState extends State<NotificacionesListScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Container(
-                      padding: const EdgeInsets.all(12),
+                      padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
                         color: notificacion.getPriorityColor().withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(10),
                       ),
                       child: Icon(
                         notificacion.getIconData(),
                         color: notificacion.getPriorityColor(),
-                        size: 24,
+                        size: 20,
                       ),
                     ),
-                    const SizedBox(width: 16),
+                    const SizedBox(width: 12),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -558,7 +545,7 @@ class _NotificacionesListScreenState extends State<NotificacionesListScreen> {
                                     fontWeight: isPendiente 
                                         ? FontWeight.bold 
                                         : FontWeight.w600,
-                                    fontSize: 16,
+                                    fontSize: 15,
                                     color: const Color(0xFF1E293B),
                                   ),
                                 ),
@@ -584,7 +571,7 @@ class _NotificacionesListScreenState extends State<NotificacionesListScreen> {
                             child: Text(
                               '${notificacion.tipoNotificacion} • ${notificacion.estado}',
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: 11,
                                 fontWeight: FontWeight.w600,
                                 color: notificacion.getStatusColor(),
                               ),
@@ -595,12 +582,12 @@ class _NotificacionesListScreenState extends State<NotificacionesListScreen> {
                             notificacion.mensaje,
                             style: TextStyle(
                               color: const Color(0xFF64748B),
-                              fontSize: 14,
+                              fontSize: 13,
                               fontWeight: isPendiente 
                                   ? FontWeight.w500 
                                   : FontWeight.normal,
                             ),
-                            maxLines: 3,
+                            maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),
                         ],
@@ -608,7 +595,7 @@ class _NotificacionesListScreenState extends State<NotificacionesListScreen> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 12),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -616,7 +603,7 @@ class _NotificacionesListScreenState extends State<NotificacionesListScreen> {
                       children: [
                         Icon(
                           Icons.access_time,
-                          size: 14,
+                          size: 12,
                           color: Colors.grey[500],
                         ),
                         const SizedBox(width: 4),
@@ -624,15 +611,15 @@ class _NotificacionesListScreenState extends State<NotificacionesListScreen> {
                           notificacion.getFormattedDate(),
                           style: TextStyle(
                             color: Colors.grey[500],
-                            fontSize: 12,
+                            fontSize: 11,
                           ),
                         ),
-                        const SizedBox(width: 12),
+                        const SizedBox(width: 8),
                         Text(
                           notificacion.getTimeAgo(),
                           style: TextStyle(
                             color: Colors.grey[400],
-                            fontSize: 11,
+                            fontSize: 10,
                             fontStyle: FontStyle.italic,
                           ),
                         ),
@@ -641,15 +628,15 @@ class _NotificacionesListScreenState extends State<NotificacionesListScreen> {
                     Row(
                       children: [
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                           decoration: BoxDecoration(
                             color: notificacion.getPriorityColor().withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
+                            borderRadius: BorderRadius.circular(8),
                           ),
                           child: Text(
                             notificacion.prioridad,
                             style: TextStyle(
-                              fontSize: 10,
+                              fontSize: 9,
                               color: notificacion.getPriorityColor(),
                               fontWeight: FontWeight.w600,
                             ),
@@ -663,12 +650,12 @@ class _NotificacionesListScreenState extends State<NotificacionesListScreen> {
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
                                 color: notificacion.getPriorityColor(),
-                                borderRadius: BorderRadius.circular(12),
+                                borderRadius: BorderRadius.circular(8),
                               ),
                               child: const Text(
                                 'Marcar leída',
                                 style: TextStyle(
-                                  fontSize: 10,
+                                  fontSize: 9,
                                   color: Colors.white,
                                   fontWeight: FontWeight.w600,
                                 ),
@@ -746,7 +733,6 @@ class _NotificacionesListScreenState extends State<NotificacionesListScreen> {
                       decoration: BoxDecoration(
                         color: const Color(0xFFF8FAFC),
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
                       ),
                       child: Text(
                         notificacion.mensaje,

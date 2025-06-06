@@ -45,7 +45,7 @@ class _InformesScreenState extends State<InformesScreen> {
     super.initState();
     _cargarDatos();
     
-    // Timer cada 1 minutos
+    // Timer cada 3 minutos
     _refreshTimer = Timer.periodic(const Duration(minutes: 3), (timer) {
       if (mounted && !_isLoading) {
         _cargarDatos();
@@ -88,9 +88,9 @@ class _InformesScreenState extends State<InformesScreen> {
       
     } catch (e) {
       print('❌ Error general en _cargarDatos: $e');
-     // setState(() {
-     //   _errorMessage = 'Error al cargar algunos datos. Verifica tu conexión.';
-     // });
+      setState(() {
+        _errorMessage = 'Error al cargar algunos datos. Verifica tu conexión.';
+      });
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -192,74 +192,105 @@ class _InformesScreenState extends State<InformesScreen> {
   }
 
   void _calcularMetricas() {
-    // Calcular ingresos de citas completadas del día
-    _ingresosCitas = _citasDelDia
-        .where((c) => c.estado.toLowerCase() == 'completada')
-        .fold(0.0, (sum, c) => sum + (c.getPrecioTotal() ?? 0.0));
-    
-    // Calcular ingresos de ventas efectivas del día
-    _ingresosVentas = _ventasDelDia
-        .where((v) => v.estado.toLowerCase() == 'efectiva')
-        .fold(0.0, (sum, v) => sum + v.total);
-    
-    _ingresosTotales = _ingresosCitas + _ingresosVentas;
-    
-    // Calcular clientes únicos atendidos
-    final clientesCitas = _citasDelDia
-        .where((c) => c.estado.toLowerCase() == 'completada')
-        .map((c) => c.idCliente)
-        .toSet();
-    
-    final clientesVentas = _ventasDelDia
-        .where((v) => v.estado.toLowerCase() == 'efectiva' && v.cliente != null)
-        .map((v) => v.cliente)
-        .toSet();
-    
-    _clientesAtendidos = {...clientesCitas, ...clientesVentas}.length;
-    
-    print('💰 Métricas calculadas:');
-    print('   - Ingresos citas: \$${NumberFormat('#,###').format(_ingresosCitas)}');
-    print('   - Ingresos ventas: \$${NumberFormat('#,###').format(_ingresosVentas)}');
-    print('   - Total: \$${NumberFormat('#,###').format(_ingresosTotales)}');
-    print('   - Clientes atendidos: $_clientesAtendidos');
+    try {
+      // Calcular ingresos de citas completadas del día
+      _ingresosCitas = 0.0;
+      for (var cita in _citasDelDia) {
+        if (cita.estado.toLowerCase() == 'completada') {
+          final precioTotal = cita.getPrecioTotal();
+          if (precioTotal != null) {
+            _ingresosCitas += precioTotal;
+          }
+        }
+      }
+      
+      // Calcular ingresos de ventas efectivas del día
+      _ingresosVentas = 0.0;
+      for (var venta in _ventasDelDia) {
+        if (venta.estado.toLowerCase() == 'efectiva') {
+          _ingresosVentas += venta.total;
+        }
+      }
+      
+      _ingresosTotales = _ingresosCitas + _ingresosVentas;
+      
+      // Calcular clientes únicos atendidos
+      final clientesCitas = _citasDelDia
+          .where((c) => c.estado.toLowerCase() == 'completada')
+          .map((c) => c.idCliente)
+          .toSet();
+      
+      final clientesVentas = _ventasDelDia
+          .where((v) => v.estado.toLowerCase() == 'efectiva' && v.cliente != null)
+          .map((v) => v.cliente)
+          .toSet();
+      
+      _clientesAtendidos = {...clientesCitas, ...clientesVentas}.length;
+      
+      print('💰 Métricas calculadas:');
+      print('   - Ingresos citas: \$${NumberFormat('#,###').format(_ingresosCitas)}');
+      print('   - Ingresos ventas: \$${NumberFormat('#,###').format(_ingresosVentas)}');
+      print('   - Total: \$${NumberFormat('#,###').format(_ingresosTotales)}');
+      print('   - Clientes atendidos: $_clientesAtendidos');
+    } catch (e) {
+      print('❌ Error en _calcularMetricas: $e');
+    }
   }
 
   void _calcularGananciasDiarias() {
-    final Map<String, double> gananciasPorDia = {};
-    final ahora = DateTime.now();
-    
-    // Calcular ganancias de los últimos 7 días
-    for (int i = 6; i >= 0; i--) {
-      final fecha = ahora.subtract(Duration(days: i));
-      final fechaKey = DateFormat('dd/MM').format(fecha);
+    try {
+      final Map<String, GananciasDiarias> gananciasPorDia = {};
+      final ahora = DateTime.now();
       
-      // Ventas del día
-      final ventasDelDia = _todasLasVentas.where((venta) {
-        return venta.fecha.year == fecha.year &&
-               venta.fecha.month == fecha.month &&
-               venta.fecha.day == fecha.day &&
-               venta.estado.toLowerCase() == 'efectiva';
-      });
+      // Calcular ganancias de los últimos 7 días
+      for (int i = 6; i >= 0; i--) {
+        final fecha = ahora.subtract(Duration(days: i));
+        final fechaKey = DateFormat('dd/MM').format(fecha);
+        
+        // Ventas del día
+        final ventasDelDia = _todasLasVentas.where((venta) {
+          return venta.fecha.year == fecha.year &&
+                 venta.fecha.month == fecha.month &&
+                 venta.fecha.day == fecha.day &&
+                 venta.estado.toLowerCase() == 'efectiva';
+        });
+        
+        // Citas del día
+        final citasDelDia = _todasLasCitas.where((cita) {
+          return cita.fecha.year == fecha.year &&
+                 cita.fecha.month == fecha.month &&
+                 cita.fecha.day == fecha.day &&
+                 cita.estado.toLowerCase() == 'completada';
+        });
+        
+        double ingresosVentas = 0.0;
+        for (var venta in ventasDelDia) {
+          ingresosVentas += venta.total;
+        }
+        
+        double ingresosCitas = 0.0;
+        for (var cita in citasDelDia) {
+          final precioTotal = cita.getPrecioTotal();
+          if (precioTotal != null) {
+            ingresosCitas += precioTotal;
+          }
+        }
+        
+        gananciasPorDia[fechaKey] = GananciasDiarias(
+          fechaKey, 
+          ingresosVentas + ingresosCitas,
+          ingresosVentas,
+          ingresosCitas
+        );
+      }
       
-      // Citas del día
-      final citasDelDia = _todasLasCitas.where((cita) {
-        return cita.fecha.year == fecha.year &&
-               cita.fecha.month == fecha.month &&
-               cita.fecha.day == fecha.day &&
-               cita.estado.toLowerCase() == 'completada';
-      });
+      _gananciasDiarias = gananciasPorDia.values.toList();
       
-      final ingresosVentas = ventasDelDia.fold(0.0, (sum, v) => sum + v.total);
-      final ingresosCitas = citasDelDia.fold(0.0, (sum, c) => sum + (c.getPrecioTotal() ?? 0.0));
-      
-      gananciasPorDia[fechaKey] = ingresosVentas + ingresosCitas;
+      print('📈 Ganancias diarias calculadas: ${_gananciasDiarias.length} días');
+    } catch (e) {
+      print('❌ Error en _calcularGananciasDiarias: $e');
+      _gananciasDiarias = [];
     }
-    
-    _gananciasDiarias = gananciasPorDia.entries
-        .map((e) => GananciasDiarias(e.key, e.value))
-        .toList();
-    
-    print('📈 Ganancias diarias calculadas: ${_gananciasDiarias.length} días');
   }
 
   Future<void> _seleccionarFecha(BuildContext context) async {
@@ -285,13 +316,12 @@ class _InformesScreenState extends State<InformesScreen> {
     if (picked != null && picked != _fechaSeleccionada) {
       setState(() => _fechaSeleccionada = picked);
       _filtrarDatosPorFecha();
-      _calcular;  {
-      setState(() => _fechaSeleccionada = picked);
-      _filtrarDatosPorFecha();
       _calcularMetricas();
-      _calcularGananciasDiarias();
     }
   }
+
+  void _irANotificaciones() {
+    Navigator.pushNamed(context, '/notificaciones');
   }
 
   @override
@@ -305,7 +335,7 @@ class _InformesScreenState extends State<InformesScreen> {
             Icon(Icons.pets, color: Colors.white, size: 24),
             SizedBox(width: 8),
             Text(
-              'Dashboard TeoCat',
+              'Dashboard',
               style: TextStyle(
                 fontWeight: FontWeight.w600,
                 fontSize: 20,
@@ -356,21 +386,16 @@ class _InformesScreenState extends State<InformesScreen> {
                 onTap: _cargarDatos,
                 child: Padding(
                   padding: const EdgeInsets.all(8),
-                  child: Badge(
-                    label: Text(_unreadCount.toString()),
-                    isLabelVisible: _unreadCount > 0,
-                    backgroundColor: const Color(0xFFEF4444),
-                    child: _isLoading 
-                        ? const SizedBox(
-                            width: 20,
-                            height: 20,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(Icons.refresh, color: Colors.white, size: 20),
-                  ),
+                  child: _isLoading 
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.refresh, color: Colors.white, size: 20),
                 ),
               ),
             ),
@@ -563,13 +588,18 @@ class _InformesScreenState extends State<InformesScreen> {
               const Color(0xFFE9D5FF)
             )),
             const SizedBox(width: 12),
-            Expanded(child: _buildMetricaCard(
-              'Alertas', 
-              _unreadCount.toString(), 
-              Icons.notifications_active, 
-              const Color(0xFFF59E0B), 
-              const Color(0xFFFEF3C7)
-            )),
+            Expanded(
+              child: GestureDetector(
+                onTap: _irANotificaciones,
+                child: _buildMetricaCard(
+                  'Alertas', 
+                  _unreadCount.toString(), 
+                  Icons.notifications_active, 
+                  const Color(0xFFF59E0B), 
+                  const Color(0xFFFEF3C7)
+                ),
+              ),
+            ),
           ],
         ),
       ],
@@ -750,8 +780,13 @@ class _InformesScreenState extends State<InformesScreen> {
                     color: Color(0xFFE2E8F0),
                   ),
                 ),
+                legend: Legend(
+                  isVisible: true,
+                  position: LegendPosition.bottom,
+                ),
                 series: <CartesianSeries>[
                   ColumnSeries<GananciasDiarias, String>(
+                    name: 'Total',
                     dataSource: _gananciasDiarias,
                     xValueMapper: (GananciasDiarias data, _) => data.fecha,
                     yValueMapper: (GananciasDiarias data, _) => data.ganancias,
@@ -762,6 +797,22 @@ class _InformesScreenState extends State<InformesScreen> {
                       labelAlignment: ChartDataLabelAlignment.top,
                       textStyle: TextStyle(fontSize: 10),
                     ),
+                  ),
+                  LineSeries<GananciasDiarias, String>(
+                    name: 'Servicios',
+                    dataSource: _gananciasDiarias,
+                    xValueMapper: (GananciasDiarias data, _) => data.fecha,
+                    yValueMapper: (GananciasDiarias data, _) => data.ingresosCitas,
+                    color: const Color(0xFF3B82F6),
+                    markerSettings: const MarkerSettings(isVisible: true),
+                  ),
+                  LineSeries<GananciasDiarias, String>(
+                    name: 'Productos',
+                    dataSource: _gananciasDiarias,
+                    xValueMapper: (GananciasDiarias data, _) => data.fecha,
+                    yValueMapper: (GananciasDiarias data, _) => data.ingresosVentas,
+                    color: const Color(0xFF10B981),
+                    markerSettings: const MarkerSettings(isVisible: true),
                   ),
                 ],
                 tooltipBehavior: TooltipBehavior(
@@ -876,6 +927,10 @@ class _InformesScreenState extends State<InformesScreen> {
               tooltipBehavior: TooltipBehavior(
                 enable: true,
                 format: 'point.x: point.y',
+              ),
+              legend: Legend(
+                isVisible: true,
+                position: LegendPosition.bottom,
               ),
             ),
           ),
@@ -1062,9 +1117,10 @@ class _InformesScreenState extends State<InformesScreen> {
   }
 
   Widget _buildNotificacionesRecientes() {
+    // Mostrar solo 3 notificaciones recientes
     final notificacionesRecientes = _notificaciones
         .where((n) => n.fechaCreacion.isAfter(DateTime.now().subtract(const Duration(days: 3))))
-        .take(5)
+        .take(3)
         .toList();
 
     return Container(
@@ -1152,30 +1208,26 @@ class _InformesScreenState extends State<InformesScreen> {
             Column(
               children: [
                 ...notificacionesRecientes.map((notif) => _buildNotificacionItem(notif)).toList(),
-                if (_notificaciones.length > 5)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 16),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: TextButton(
-                        onPressed: () {
-                          Navigator.pushNamed(context, '/notificaciones');
-                        },
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.all(12),
-                          backgroundColor: const Color.fromARGB(255, 76, 142, 147).withOpacity(0.1),
-                          foregroundColor: const Color.fromARGB(255, 76, 142, 147),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: const Text(
-                          'Ver todas las notificaciones',
-                          style: TextStyle(fontWeight: FontWeight.w500),
-                        ),
+                const SizedBox(height: 16),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: _irANotificaciones,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.all(16),
+                      backgroundColor: const Color.fromARGB(255, 76, 142, 147),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
                       ),
+                      elevation: 0,
+                    ),
+                    child: const Text(
+                      'Ver todas las notificaciones',
+                      style: TextStyle(fontWeight: FontWeight.w600),
                     ),
                   ),
+                ),
               ],
             ),
         ],
@@ -1231,45 +1283,14 @@ class _InformesScreenState extends State<InformesScreen> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  notif.mensaje,
+                  notif.getTimeAgo(),
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: 11,
                     color: Color(0xFF64748B),
                   ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
                 ),
               ],
             ),
-          ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                notif.getTimeAgo(),
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Color(0xFF64748B),
-                ),
-              ),
-              if (notif.estado.toLowerCase() == 'pendiente')
-                Container(
-                  margin: const EdgeInsets.only(top: 6),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: notif.getPriorityColor(),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    notif.prioridad,
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-            ],
           ),
         ],
       ),
@@ -1327,13 +1348,6 @@ class _InformesScreenState extends State<InformesScreen> {
   }
 }
 
-extension on Object? {
-  operator +(double other) {}
-}
-
-class _calcular {
-}
-
 class ChartData {
   final String x;
   final double y;
@@ -1344,9 +1358,8 @@ class ChartData {
 class GananciasDiarias {
   final String fecha;
   final double ganancias;
+  final double ingresosVentas;
+  final double ingresosCitas;
 
-  GananciasDiarias(this.fecha, this.ganancias);
-
-  
+  GananciasDiarias(this.fecha, this.ganancias, this.ingresosVentas, this.ingresosCitas);
 }
-

@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
+import 'package:provider/provider.dart';
 import '../../services/api_service.dart';
 import '../../widgets/app_drawer.dart';
 
@@ -13,8 +13,6 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
-  final ApiService _apiService = ApiService();
-  
   int _unreadCount = 0;
   bool _isLoading = true;
   Map<String, dynamic> _metricas = {};
@@ -56,67 +54,134 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   Future<void> _loadData() async {
+    final apiService = Provider.of<ApiService>(context, listen: false);
+    
     try {
+      print('🐾 Iniciando carga de datos del home...');
+      
+      // Cargar datos de forma segura
       final futures = await Future.wait([
-        _apiService.getUnreadNotificacionesCount(),
-        _apiService.getMetricasVentas(),
-        _apiService.getMetricasCitas(),
-        _loadActividadReciente(),
-      ]);
+        _loadUnreadCount(apiService),
+        _loadMetricas(apiService),
+        _loadActividadReciente(apiService),
+      ], eagerError: false);
       
       if (mounted) {
         setState(() {
-          _unreadCount = futures[0] as int;
-          final metricasVentas = futures[1] as Map<String, dynamic>;
-          final metricasCitas = futures[2] as Map<String, dynamic>;
-          _metricas = {...metricasVentas, ...metricasCitas};
           _isLoading = false;
         });
       }
+      
+      print('✅ Datos del home cargados exitosamente');
     } catch (e) {
-      print('Error cargando datos del home: $e');
+      print('❌ Error cargando datos del home: $e');
       if (mounted) {
         setState(() => _isLoading = false);
       }
     }
   }
 
-  Future<List<dynamic>> _loadActividadReciente() async {
+  Future<void> _loadUnreadCount(ApiService apiService) async {
     try {
-      final ventas = await _apiService.getVentasRecientes(limit: 3);
-      final citas = await _apiService.getCitasRecientes(limit: 3);
+      final count = await apiService.getUnreadNotificacionesCount();
+      if (mounted) {
+        setState(() {
+          _unreadCount = count;
+        });
+      }
+    } catch (e) {
+      print('⚠️ Error cargando notificaciones: $e');
+    }
+  }
+
+  Future<void> _loadMetricas(ApiService apiService) async {
+    try {
+      final metricasVentas = await apiService.getMetricasVentas();
+      final metricasCitas = await apiService.getMetricasCitas();
+      
+      if (mounted) {
+        setState(() {
+          _metricas = {...metricasVentas, ...metricasCitas};
+        });
+      }
+    } catch (e) {
+      print('⚠️ Error cargando métricas: $e');
+    }
+  }
+
+  Future<void> _loadActividadReciente(ApiService apiService) async {
+    try {
+      print('🐾 Cargando actividad reciente...');
+      
+      // Cargar ventas y citas recientes de forma segura
+      final ventasRecientes = await apiService.getVentasRecientes(limit: 3);
+      final citasRecientes = await apiService.getCitasRecientes(limit: 3);
       
       final actividad = <Map<String, dynamic>>[];
       
-      for (var venta in ventas) {
-        actividad.add({
-          'tipo': 'venta',
-          'titulo': 'Nueva venta',
-          'descripcion': 'Venta a ${venta['cliente'] ?? 'Cliente'}',
-          'fecha': DateTime.parse(venta['fecha']),
-          'icono': Icons.shopping_cart,
-          'color': const Color(0xFF10B981),
-        });
+      // Procesar ventas recientes
+      if (ventasRecientes.isNotEmpty) {
+        for (var venta in ventasRecientes) {
+          try {
+            actividad.add({
+              'tipo': 'venta',
+              'titulo': 'Nueva venta',
+              'descripcion': 'Venta a ${venta['cliente'] ?? 'Cliente'}',
+              'fecha': DateTime.parse(venta['fecha']),
+              'icono': Icons.shopping_cart,
+              'color': const Color(0xFF10B981),
+            });
+          } catch (e) {
+            print('⚠️ Error procesando venta: $e');
+          }
+        }
       }
       
-      for (var cita in citas) {
-        actividad.add({
-          'tipo': 'cita',
-          'titulo': 'Cita programada',
-          'descripcion': 'Cita con ${cita['mascota'] ?? 'Mascota'}',
-          'fecha': DateTime.parse(cita['fecha']),
-          'icono': Icons.calendar_today,
-          'color': const Color(0xFF3B82F6),
-        });
+      // Procesar citas recientes
+      if (citasRecientes.isNotEmpty) {
+        for (var cita in citasRecientes) {
+          try {
+            actividad.add({
+              'tipo': 'cita',
+              'titulo': 'Cita programada',
+              'descripcion': 'Cita con ${cita['mascota'] ?? 'Mascota'}',
+              'fecha': DateTime.parse(cita['fecha']),
+              'icono': Icons.calendar_today,
+              'color': const Color(0xFF3B82F6),
+            });
+          } catch (e) {
+            print('⚠️ Error procesando cita: $e');
+          }
+        }
       }
       
+      // Ordenar por fecha y tomar los más recientes
       actividad.sort((a, b) => b['fecha'].compareTo(a['fecha']));
-      _actividadReciente = actividad.take(5).toList();
       
-      return _actividadReciente;
+      if (mounted) {
+        setState(() {
+          _actividadReciente = actividad.take(5).toList();
+        });
+      }
+      
+      print('✅ Actividad reciente cargada: ${_actividadReciente.length} elementos');
     } catch (e) {
-      print('Error cargando actividad reciente: $e');
-      return [];
+      print('❌ Error cargando actividad reciente: $e');
+      if (mounted) {
+        setState(() {
+          _actividadReciente = [];
+        });
+      }
+    }
+  }
+
+  // Método seguro para formatear fechas
+  String _formatearFecha(DateTime fecha) {
+    try {
+      return DateFormat('EEEE, dd MMMM yyyy', 'es').format(fecha);
+    } catch (e) {
+      // Fallback si hay problemas con la localización
+      return DateFormat('dd/MM/yyyy').format(fecha);
     }
   }
 
@@ -252,7 +317,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Hoy es ${DateFormat('EEEE, dd MMMM yyyy', 'es').format(DateTime.now())}',
+                  'Hoy es ${_formatearFecha(DateTime.now())}',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.9),
                     fontSize: 14,
@@ -265,9 +330,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     color: Colors.white.withOpacity(0.2),
                     borderRadius: BorderRadius.circular(20),
                   ),
-                  child: const Text(
-                    'Gestión Veterinaria',
-                    style: TextStyle(
+                  child: Text(
+                    _isLoading ? 'Cargando...' : 'Datos actualizados',
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 12,
                       fontWeight: FontWeight.w500,

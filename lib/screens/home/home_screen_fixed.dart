@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
 import '../../services/api_service.dart';
 import '../../widgets/app_drawer.dart';
 
@@ -252,7 +251,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Hoy es ${DateFormat('EEEE, dd MMMM yyyy', 'es').format(DateTime.now())}',
+                  'Hoy es ${_formatearFecha(DateTime.now())}',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.9),
                     fontSize: 14,
@@ -292,6 +291,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         ],
       ),
     );
+  }
+
+  // Método seguro para formatear fechas
+  String _formatearFecha(DateTime fecha) {
+    try {
+      return DateFormat('EEEE, dd MMMM yyyy', 'es').format(fecha);
+    } catch (e) {
+      // Fallback si hay problemas con la localización
+      return DateFormat('dd/MM/yyyy').format(fecha);
+    }
   }
 
   Widget _buildMetricasResumen() {

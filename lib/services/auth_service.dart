@@ -9,6 +9,8 @@ class AuthService extends ChangeNotifier {
   
   bool get isAuthenticated => _isAuthenticated;
   Map<String, dynamic>? get userData => _userData;
+
+  get token => null;
   
   // Verificar si hay una sesión activa
   Future<bool> checkAuth() async {

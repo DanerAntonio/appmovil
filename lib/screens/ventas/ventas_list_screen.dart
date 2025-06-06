@@ -1,554 +1,637 @@
-// screens/ventas_list_screen.dart
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import '../../models/venta.dart';
 import '../../services/api_service.dart';
-import '../../utils/theme.dart';
 import '../../widgets/app_drawer.dart';
 
-class VentasListScreen extends StatefulWidget {
-  const VentasListScreen({Key? key}) : super(key: key);
+class VentasScreen extends StatefulWidget {
+  const VentasScreen({super.key});
 
   @override
-  _VentasListScreenState createState() => _VentasListScreenState();
+  State<VentasScreen> createState() => _VentasScreenState();
 }
 
-class _VentasListScreenState extends State<VentasListScreen> {
+class _VentasScreenState extends State<VentasScreen> {
   final ApiService _apiService = ApiService();
   List<Venta> _ventas = [];
+  List<Venta> _ventasFiltradas = [];
   bool _isLoading = true;
-  String _errorMessage = '';
-  
+  String? _error;
+  String _busqueda = '';
+
   @override
   void initState() {
     super.initState();
-    _loadVentas();
+    _cargarVentas();
   }
-  
-  Future<void> _loadVentas() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = '';
-    });
+
+  Future<void> _cargarVentas() async {
+    try {
+      setState(() {
+        _isLoading = true;
+        _error = null;
+      });
+
+      print('🐾 Cargando ventas...');
+      final ventas = await _apiService.getVentas();
+      
+      setState(() {
+        _ventas = ventas;
+        _aplicarFiltros();
+        _isLoading = false;
+      });
+      
+      print('✅ Ventas cargadas: ${ventas.length}');
+    } catch (e) {
+      print('❌ Error cargando ventas: $e');
+      setState(() {
+        _error = e.toString();
+        _isLoading = false;
+      });
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error al cargar ventas: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            action: SnackBarAction(
+              label: 'Reintentar',
+              textColor: Colors.white,
+              onPressed: _cargarVentas,
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  void _aplicarFiltros() {
+    _ventasFiltradas = _ventas.where((venta) {
+      // Solo filtro por búsqueda
+      if (_busqueda.isNotEmpty) {
+        return venta.id.toString().contains(_busqueda) ||
+               (venta.cliente?.toLowerCase().contains(_busqueda.toLowerCase()) ?? false) ||
+               (venta.mascota?.toLowerCase().contains(_busqueda.toLowerCase()) ?? false);
+      }
+      return true;
+    }).toList();
     
-    try {
-      final response = await _apiService.getVentas();
-      
-      setState(() {
-        _ventas = response.map((data) => Venta.fromJson(data)).toList();
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Error al cargar ventas: ${e.toString()}';
-        _isLoading = false;
-      });
-    }
+    // Ordenar por fecha más reciente
+    _ventasFiltradas.sort((a, b) => b.fecha.compareTo(a.fecha));
   }
-  
-  Future<void> _changeVentaStatus(Venta venta, String newStatus) async {
-    try {
-      await _apiService.changeVentaStatus(venta.idVenta, newStatus);
-      
-      // Recargar ventas
-      _loadVentas();
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Estado de venta actualizado a: $newStatus'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al cambiar estado: ${e.toString()}'),
-            backgroundColor: AppTheme.errorColor,
-          ),
-        );
-      }
-    }
-  }
-  
-  Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'efectiva':
-        return Colors.green;
-      case 'pendiente':
-        return Colors.orange;
-      case 'cancelada':
-        return Colors.red;
-      default:
-        return Colors.grey;
-    }
-  }
-  
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFFF8FAFC),
+      drawer: const AppDrawer(),
       appBar: AppBar(
-        title: const Text('Ventas'),
+        title: const Row(
+          children: [
+            Icon(Icons.pets, color: Colors.white, size: 24),
+            SizedBox(width: 8),
+            Text(
+              'Ventas TeoCat',
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
+              ),
+            ),
+          ],
+        ),
+        backgroundColor: const Color.fromARGB(255, 76, 142, 147),
+        elevation: 0,
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _loadVentas,
+            icon: const Icon(Icons.refresh, color: Colors.white),
+            tooltip: 'Actualizar',
+            onPressed: _cargarVentas,
+          ),
+          IconButton(
+            icon: const Icon(Icons.home, color: Colors.white),
+            tooltip: 'Regresar al inicio',
+            onPressed: () {
+              Navigator.pushReplacementNamed(context, '/informes');
+            },
           ),
         ],
       ),
-      drawer: const AppDrawer(),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _errorMessage.isNotEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.error_outline,
-                        color: AppTheme.errorColor,
-                        size: 48,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        _errorMessage,
-                        style: const TextStyle(color: AppTheme.errorColor),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadVentas,
-                        child: const Text('Reintentar'),
-                      ),
-                    ],
-                  ),
-                )
-              : _ventas.isEmpty
-                  ? Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(
-                            Icons.shopping_cart_outlined,
-                            color: Colors.grey,
-                            size: 48,
-                          ),
-                          const SizedBox(height: 16),
-                          const Text(
-                            'No hay ventas disponibles',
-                            style: TextStyle(color: Colors.grey),
-                          ),
-                          const SizedBox(height: 16),
-                          ElevatedButton(
-                            onPressed: _loadVentas,
-                            child: const Text('Actualizar'),
-                          ),
-                        ],
-                      ),
-                    )
-                  : RefreshIndicator(
-                      onRefresh: _loadVentas,
-                      child: ListView.builder(
-                        padding: const EdgeInsets.all(16),
-                        itemCount: _ventas.length,
-                        itemBuilder: (context, index) {
-                          final venta = _ventas[index];
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(
-                                        'Venta #${venta.idVenta}',
-                                        style: const TextStyle(
-                                          fontSize: 18,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
-                                          vertical: 4,
-                                        ),
-                                        decoration: BoxDecoration(
-                                          color: _getStatusColor(venta.estado).withOpacity(0.2),
-                                          borderRadius: BorderRadius.circular(8),
-                                        ),
-                                        child: Text(
-                                          venta.estado,
-                                          style: TextStyle(
-                                            color: _getStatusColor(venta.estado),
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  Text(
-                                    'Cliente: ${venta.cliente != null ? "${venta.cliente!['Nombre'] ?? ''} ${venta.cliente!['Apellido'] ?? ''}" : "Consumidor Final"}',
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Fecha: ${venta.fechaVenta.day}/${venta.fechaVenta.month}/${venta.fechaVenta.year}',
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Total: \$${venta.totalMonto.toStringAsFixed(0)}',
-                                    style: const TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      OutlinedButton.icon(
-                                        icon: const Icon(Icons.visibility),
-                                        label: const Text('Detalles'),
-                                        onPressed: () {
-                                          // Navegar a detalles de venta
-                                          Navigator.of(context).push(
-                                            MaterialPageRoute(
-                                              builder: (context) => VentaDetalleScreen(ventaId: venta.idVenta),
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                      PopupMenuButton<String>(
-                                        icon: const Icon(Icons.more_vert),
-                                        onSelected: (value) {
-                                          _changeVentaStatus(venta, value);
-                                        },
-                                        itemBuilder: (context) => [
-                                          const PopupMenuItem(
-                                            value: 'Efectiva',
-                                            child: Text('Marcar como Efectiva'),
-                                          ),
-                                          const PopupMenuItem(
-                                            value: 'Pendiente',
-                                            child: Text('Marcar como Pendiente'),
-                                          ),
-                                          const PopupMenuItem(
-                                            value: 'Cancelada',
-                                            child: Text('Marcar como Cancelada'),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-    );
-  }
-}
-
-class VentaDetalleScreen extends StatefulWidget {
-  final int ventaId;
-  
-  const VentaDetalleScreen({Key? key, required this.ventaId}) : super(key: key);
-
-  @override
-  _VentaDetalleScreenState createState() => _VentaDetalleScreenState();
-}
-
-class _VentaDetalleScreenState extends State<VentaDetalleScreen> {
-  final ApiService _apiService = ApiService();
-  Venta? _venta;
-  bool _isLoading = true;
-  String _errorMessage = '';
-  
-  @override
-  void initState() {
-    super.initState();
-    _loadVentaDetails();
-  }
-  
-  Future<void> _loadVentaDetails() async {
-    setState(() {
-      _isLoading = true;
-      _errorMessage = '';
-    });
-    
-    try {
-      final response = await _apiService.getVentaById(widget.ventaId);
-      
-      setState(() {
-        _venta = Venta.fromJson(response);
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Error al cargar detalles de venta: ${e.toString()}';
-        _isLoading = false;
-      });
-    }
-  }
-  
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('Venta #${widget.ventaId}'),
-      ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _errorMessage.isNotEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(
-                        Icons.error_outline,
-                        color: AppTheme.errorColor,
-                        size: 48,
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        _errorMessage,
-                        style: const TextStyle(color: AppTheme.errorColor),
-                        textAlign: TextAlign.center,
-                      ),
-                      const SizedBox(height: 16),
-                      ElevatedButton(
-                        onPressed: _loadVentaDetails,
-                        child: const Text('Reintentar'),
-                      ),
-                    ],
-                  ),
-                )
-              : _venta == null
-                  ? const Center(
-                      child: Text('No se encontró la venta'),
-                    )
-                  : SingleChildScrollView(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          // Información de la venta
-                          Card(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Información de la Venta',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const Divider(),
-                                  _buildInfoRow('Cliente', _venta!.cliente != null 
-                                    ? "${_venta!.cliente!['Nombre'] ?? ''} ${_venta!.cliente!['Apellido'] ?? ''}" 
-                                    : "Consumidor Final"),
-                                  _buildInfoRow('Fecha', '${_venta!.fechaVenta.day}/${_venta!.fechaVenta.month}/${_venta!.fechaVenta.year}'),
-                                  _buildInfoRow('Estado', _venta!.estado),
-                                  _buildInfoRow('Método de pago', _venta!.metodoPago ?? 'No especificado'),
-                                  _buildInfoRow('Subtotal', '\$${_venta!.subtotal.toStringAsFixed(0)}'),
-                                  _buildInfoRow('IVA', '\$${_venta!.totalIva.toStringAsFixed(0)}'),
-                                  _buildInfoRow('Total', '\$${_venta!.totalMonto.toStringAsFixed(0)}'),
-                                ],
-                              ),
-                            ),
-                          ),
-                          
-                          const SizedBox(height: 16),
-                          
-                          // Detalles de la venta
-                          Card(
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Detalles de la Venta',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                  const Divider(),
-                                  ListView.builder(
-                                    shrinkWrap: true,
-                                    physics: const NeverScrollableScrollPhysics(),
-                                    itemCount: _venta!.detalles.length,
-                                    itemBuilder: (context, index) {
-                                      final detalle = _venta!.detalles[index];
-                                      return ListTile(
-                                        title: Text(detalle.nombreProducto),
-                                        subtitle: Text('Cantidad: ${detalle.cantidad}'),
-                                        trailing: Text('\$${detalle.subtotal.toStringAsFixed(0)}'),
-                                      );
-                                    },
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                          
-                          // Comprobante de pago (si existe)
-                          if (_venta!.comprobantePago != null) ...[
-                            const SizedBox(height: 16),
-                            Card(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'Comprobante de Pago',
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const Divider(),
-                                    Text(_venta!.comprobantePago!),
-                                    if (_venta!.referenciaPago != null) ...[
-                                      const SizedBox(height: 8),
-                                      Text('Referencia: ${_venta!.referenciaPago}'),
-                                    ],
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                          
-                          // Notas adicionales (si existen)
-                          if (_venta!.notasAdicionales != null) ...[
-                            const SizedBox(height: 16),
-                            Card(
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    const Text(
-                                      'Notas Adicionales',
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const Divider(),
-                                    Text(_venta!.notasAdicionales!),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ],
-                          
-                          const SizedBox(height: 24),
-                          
-                          // Botones de acción
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                            children: [
-                              ElevatedButton.icon(
-                                icon: const Icon(Icons.check_circle),
-                                label: const Text('Marcar Efectiva'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.green,
-                                  foregroundColor: Colors.white,
-                                ),
-                                onPressed: _venta!.estado.toLowerCase() != 'efectiva'
-                                    ? () async {
-                                        await _apiService.changeVentaStatus(_venta!.idVenta, 'Efectiva');
-                                        _loadVentaDetails();
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('Venta marcada como Efectiva'),
-                                            backgroundColor: Colors.green,
-                                          ),
-                                        );
-                                      }
-                                    : null,
-                              ),
-                              ElevatedButton.icon(
-                                icon: const Icon(Icons.cancel),
-                                label: const Text('Cancelar Venta'),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.red,
-                                  foregroundColor: Colors.white,
-                                ),
-                                onPressed: _venta!.estado.toLowerCase() != 'cancelada'
-                                    ? () async {
-                                        await _apiService.changeVentaStatus(_venta!.idVenta, 'Cancelada');
-                                        _loadVentaDetails();
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(
-                                            content: Text('Venta marcada como Cancelada'),
-                                            backgroundColor: Colors.red,
-                                          ),
-                                        );
-                                      }
-                                    : null,
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-    );
-  }
-  
-  Widget _buildInfoRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      body: Column(
         children: [
-          SizedBox(
-            width: 100,
-            child: Text(
-              '$label:',
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
+          _buildSearchHeader(),
+          Expanded(child: _buildBody()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSearchHeader() {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Color(0x0A000000),
+            blurRadius: 10,
+            offset: Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Barra de búsqueda
+          Container(
+            decoration: BoxDecoration(
+              color: const Color(0xFFF8FAFC),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFE2E8F0)),
+            ),
+            child: TextField(
+              onChanged: (value) {
+                setState(() {
+                  _busqueda = value;
+                  _aplicarFiltros();
+                });
+              },
+              decoration: const InputDecoration(
+                hintText: 'Buscar por ID, cliente o mascota...',
+                prefixIcon: Icon(Icons.search, color: Color(0xFF64748B)),
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               ),
             ),
           ),
-          Expanded(
-            child: Text(value),
+          const SizedBox(height: 16),
+          // Contador de ventas
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: const Color.fromARGB(255, 76, 142, 147).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              'Total de ventas: ${_ventasFiltradas.length}',
+              style: const TextStyle(
+                color: Color.fromARGB(255, 76, 142, 147),
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildBody() {
+    if (_isLoading) {
+      return const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(
+              color: Color.fromARGB(255, 76, 142, 147),
+            ),
+            SizedBox(height: 16),
+            Text('Cargando ventas de mascotas...'),
+          ],
+        ),
+      );
+    }
+
+    if (_error != null) {
+      return _buildErrorWidget();
+    }
+
+    if (_ventasFiltradas.isEmpty) {
+      return _buildEmptyWidget();
+    }
+
+    return RefreshIndicator(
+      onRefresh: _cargarVentas,
+      color: const Color.fromARGB(255, 76, 142, 147),
+      child: ListView.builder(
+        padding: const EdgeInsets.all(20),
+        itemCount: _ventasFiltradas.length,
+        itemBuilder: (context, index) {
+          final venta = _ventasFiltradas[index];
+          return _buildVentaCard(venta);
+        },
+      ),
+    );
+  }
+
+  Widget _buildErrorWidget() {
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.error_outline,
+                color: Colors.red,
+                size: 48,
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Error al cargar ventas',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1E293B),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _error!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF64748B),
+              ),
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton.icon(
+              onPressed: _cargarVentas,
+              icon: const Icon(Icons.refresh),
+              label: const Text('Reintentar'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color.fromARGB(255, 76, 142, 147),
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEmptyWidget() {
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(32),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color.fromARGB(255, 76, 142, 147).withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.pets,
+                color: Color.fromARGB(255, 76, 142, 147),
+                size: 48,
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              _busqueda.isNotEmpty 
+                  ? 'No se encontraron ventas'
+                  : 'No hay ventas registradas',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF1E293B),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              _busqueda.isNotEmpty
+                  ? 'Intenta con otros términos de búsqueda'
+                  : 'Las ventas de productos y servicios para mascotas aparecerán aquí',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Color(0xFF64748B),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildVentaCard(Venta venta) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: _getEstadoColor(venta.estado ?? '').withOpacity(0.3),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: _getEstadoColor(venta.estado ?? '').withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.pets,
+                    color: _getEstadoColor(venta.estado ?? ''),
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Venta #${venta.id}',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: Color(0xFF1E293B),
+                        ),
+                      ),
+                      Text(
+                        'Cliente: ${venta.cliente ?? 'Consumidor final'}',
+                        style: const TextStyle(
+                          color: Color(0xFF64748B),
+                          fontSize: 14,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: _getEstadoColor(venta.estado ?? ''),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    venta.estado ?? 'Sin estado',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            
+            // Información principal
+            Row(
+              children: [
+                Expanded(
+                  child: _buildInfoItem(
+                    Icons.calendar_today,
+                    'Fecha',
+                    _formatearFecha(venta.fecha),
+                  ),
+                ),
+                Expanded(
+                  child: _buildInfoItem(
+                    Icons.attach_money,
+                    'Total',
+                    NumberFormat.currency(
+                      locale: 'es-CO',
+                      symbol: '\$',
+                      decimalDigits: 0,
+                    ).format(venta.total),
+                  ),
+                ),
+              ],
+            ),
+            
+            const SizedBox(height: 12),
+            
+            // Información adicional
+            Row(
+              children: [
+                if (venta.mascota != null)
+                  Expanded(
+                    child: _buildInfoItem(
+                      Icons.pets,
+                      'Mascota',
+                      venta.mascota!,
+                    ),
+                  ),
+                Expanded(
+                  child: _buildInfoItem(
+                    Icons.category,
+                    'Tipo',
+                    venta.tipo,
+                  ),
+                ),
+              ],
+            ),
+            
+            // Resumen de productos y servicios
+            if (venta.detalles != null && venta.detalles!.isNotEmpty || 
+                venta.servicios != null && venta.servicios!.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              const Divider(),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceAround,
+                children: [
+                  if (venta.detalles != null && venta.detalles!.isNotEmpty)
+                    _buildResumenItem(
+                      Icons.inventory,
+                      'Productos',
+                      '${venta.detalles!.length} items',
+                      Colors.blue,
+                    ),
+                  if (venta.servicios != null && venta.servicios!.isNotEmpty)
+                    _buildResumenItem(
+                      Icons.medical_services,
+                      'Servicios',
+                      '${venta.servicios!.length} servicios',
+                      Colors.green,
+                    ),
+                ],
+              ),
+            ],
+            
+            // Notas si existen
+            if (venta.notas != null && venta.notas!.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFF8FAFC),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: const Color(0xFFE2E8F0)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.note, size: 16, color: Color(0xFF64748B)),
+                        SizedBox(width: 4),
+                        Text(
+                          'Notas:',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Color(0xFF64748B),
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      venta.notas!,
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: Color(0xFF1E293B),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoItem(IconData icon, String label, String value) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 16,
+          color: const Color(0xFF64748B),
+        ),
+        const SizedBox(width: 8),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFF64748B),
+              ),
+            ),
+            Text(
+              value,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: Color(0xFF1E293B),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildResumenItem(IconData icon, String label, String value, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 11,
+                  color: color,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: color,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _getEstadoColor(String estado) {
+    switch (estado.toLowerCase()) {
+      case 'efectiva':
+      case 'completado':
+        return Colors.green;
+      case 'pendiente':
+        return Colors.orange;
+      case 'cancelado':
+        return Colors.red;
+      default:
+        return const Color.fromARGB(255, 76, 142, 147);
+    }
+  }
+
+  String _formatearFecha(DateTime fecha) {
+    return DateFormat('dd/MM/yyyy HH:mm').format(fecha);
   }
 }

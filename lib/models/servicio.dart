@@ -1,13 +1,13 @@
-// lib/models/servicio.dart
 class Servicio {
   final int id;
   final String nombre;
   final String descripcion;
   final double precio;
-  final bool estado;
+  final int duracion; // en minutos
+  final String? categoria;
+  final bool activo;
+  final bool estado; // Para compatibilidad con tu código existente
   final String? foto;
-  final int duracion;
-  final int idTipoServicio;
   final String? nombreTipoServicio;
   final String? beneficios;
   final String? queIncluye;
@@ -17,10 +17,11 @@ class Servicio {
     required this.nombre,
     required this.descripcion,
     required this.precio,
-    required this.estado,
-    this.foto,
     required this.duracion,
-    required this.idTipoServicio,
+    this.categoria,
+    this.activo = true,
+    this.estado = true,
+    this.foto,
     this.nombreTipoServicio,
     this.beneficios,
     this.queIncluye,
@@ -28,19 +29,47 @@ class Servicio {
 
   factory Servicio.fromJson(Map<String, dynamic> json) {
     return Servicio(
-      id: json['IdServicio'],
-      nombre: json['Nombre'],
-      descripcion: json['Descripcion'] ?? '',
-      precio: double.parse(json['Precio'].toString()),
-      estado: json['Estado'] == 1 || json['Estado'] == true,
-      foto: json['Foto'],
-      duracion: json['Duracion'] ?? 0,
-      idTipoServicio: json['IdTipoServicio'],
-      nombreTipoServicio: json['NombreTipoServicio'],
-      beneficios: json['Beneficios'],
-      queIncluye: json['Que_incluye'],
+      id: json['id'] ?? json['idServicio'] ?? 0,
+      nombre: json['nombre'] ?? '',
+      descripcion: json['descripcion'] ?? '',
+      precio: (json['precio'] ?? 0.0).toDouble(),
+      duracion: json['duracion'] ?? 60,
+      categoria: json['categoria'],
+      activo: json['activo'] ?? json['estado'] ?? true,
+      estado: json['estado'] ?? json['activo'] ?? true,
+      foto: json['foto'] ?? json['imagen'],
+      nombreTipoServicio: json['nombreTipoServicio'] ?? json['tipo_servicio'],
+      beneficios: json['beneficios'],
+      queIncluye: json['queIncluye'] ?? json['que_incluye'],
     );
   }
 
-  get idServicio => null;
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'nombre': nombre,
+      'descripcion': descripcion,
+      'precio': precio,
+      'duracion': duracion,
+      'categoria': categoria,
+      'activo': activo,
+      'estado': estado,
+      'foto': foto,
+      'nombreTipoServicio': nombreTipoServicio,
+      'beneficios': beneficios,
+      'queIncluye': queIncluye,
+    };
+  }
+
+  String getPrecioFormateado() {
+    return '\$${precio.toStringAsFixed(0)}';
+  }
+
+  String getDuracionFormateada() {
+    if (duracion < 60) return '${duracion}min';
+    final horas = duracion ~/ 60;
+    final minutos = duracion % 60;
+    if (minutos == 0) return '${horas}h';
+    return '${horas}h ${minutos}min';
+  }
 }

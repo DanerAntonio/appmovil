@@ -7,12 +7,12 @@ class AppTheme {
   static const Color accentColor = Color(0xFF8AC6D1);    // Azul claro
   static const Color backgroundColor = Color(0xFFF8F9FA); // Gris muy claro
   static const Color errorColor = Color(0xFFE63946);     // Rojo
-  
+
   // Colores para mascotas
   static const Color catColor = Color(0xFFFFB347);       // Naranja gato
   static const Color dogColor = Color(0xFF9DC88D);       // Verde perro
   static const Color pawColor = Color(0xFF6A4C93);       // Morado huella
-  
+
   // Tema claro
   static ThemeData lightTheme = ThemeData(
     primaryColor: primaryColor,
@@ -65,7 +65,7 @@ class AppTheme {
       ),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       elevation: 2,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),

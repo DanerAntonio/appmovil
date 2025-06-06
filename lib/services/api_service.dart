@@ -1,7 +1,8 @@
-// services/api_service.dart
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../models/venta.dart';
 import '../models/cita.dart';
 
 class ApiConfig {
@@ -49,7 +50,7 @@ class ApiService {
     final response = await http.get(
       Uri.parse(url),
       headers: _buildHeaders(token),
-    ).timeout(Duration(seconds: requestTimeout));
+    ).timeout(const Duration(seconds: requestTimeout));
 
     return _handleResponse(response);
   }
@@ -62,7 +63,7 @@ class ApiService {
       Uri.parse(url),
       headers: _buildHeaders(token),
       body: json.encode(data),
-    ).timeout(Duration(seconds: requestTimeout));
+    ).timeout(const Duration(seconds: requestTimeout));
 
     return _handleResponse(response);
   }
@@ -75,7 +76,7 @@ class ApiService {
       Uri.parse(url),
       headers: _buildHeaders(token),
       body: json.encode(data),
-    ).timeout(Duration(seconds: requestTimeout));
+    ).timeout(const Duration(seconds: requestTimeout));
 
     return _handleResponse(response);
   }
@@ -87,7 +88,7 @@ class ApiService {
     final response = await http.delete(
       Uri.parse(url),
       headers: _buildHeaders(token),
-    ).timeout(Duration(seconds: requestTimeout));
+    ).timeout(const Duration(seconds: requestTimeout));
 
     return _handleResponse(response);
   }
@@ -100,7 +101,7 @@ class ApiService {
       Uri.parse(url),
       headers: _buildHeaders(token),
       body: json.encode(data),
-    ).timeout(Duration(seconds: requestTimeout));
+    ).timeout(const Duration(seconds: requestTimeout));
 
     return _handleResponse(response);
   }
@@ -179,165 +180,426 @@ class ApiService {
   }
 
   // ---------------------------
-  // Ventas
+  // Ventas CON DETALLES COMPLETOS
   // ---------------------------
-  Future<List<dynamic>> getVentas() async {
+  Future<List<Venta>> getVentas() async {
     try {
-      return await get('/ventas') as List;
-    } catch (_) {
-      try {
-        return await get('/sales/ventas') as List;
-      } catch (e) {
-        throw ApiException(statusCode: 404, message: 'No se pudieron obtener las ventas.');
+      print('🐾 Obteniendo ventas desde: $baseUrl/sales/ventas');
+      final response = await get('/sales/ventas');
+      
+      if (response == null) {
+        print('❌ La respuesta del servidor es nula');
+        return [];
       }
+
+      List<dynamic> ventasData;
+      if (response is Map && response.containsKey('data')) {
+        ventasData = response['data'] as List;
+      } else if (response is List) {
+        ventasData = response;
+      } else {
+        print('❌ Formato de respuesta inesperado: $response');
+        throw Exception('Formato de respuesta inválido');
+      }
+
+      final ventas = <Venta>[];
+      for (var item in ventasData) {
+        try {
+          // Crear venta base
+          final venta = Venta.fromJson(item);
+          
+          // Obtener detalles de productos y servicios
+          try {
+            final detallesProductos = await getDetallesVenta(venta.id.toString());
+            final detallesServicios = await getDetallesServiciosVenta(venta.id.toString());
+            
+            // Agregar detalles a la venta
+            venta.detalles = detallesProductos;
+            venta.servicios = detallesServicios;
+          } catch (e) {
+            print('⚠️ Error obteniendo detalles para venta ${venta.id}: $e');
+          }
+          
+          ventas.add(venta);
+        } catch (e) {
+          print('⚠️ Error parseando venta: $e');
+          print('📄 Item problemático: $item');
+        }
+      }
+
+      print('✅ Ventas cargadas exitosamente: ${ventas.length}');
+      return ventas;
+    } catch (e, stackTrace) {
+      print('❌ Error en getVentas: $e');
+      print('📍 Stack trace: $stackTrace');
+      throw Exception('No se pudieron cargar las ventas. Verifica tu conexión.');
     }
   }
 
-  Future<Map<String, dynamic>> getVentaById(int id) async {
+  Future<Venta> getVentaById(String id) async {
     try {
-      return await get('/ventas/$id') as Map<String, dynamic>;
-    } catch (_) {
-      try {
-        return await get('/sales/ventas/$id') as Map<String, dynamic>;
-      } catch (e) {
-        throw ApiException(statusCode: 404, message: 'No se encontró la venta con ID $id.');
+      final ventaId = int.tryParse(id);
+      if (ventaId == null || ventaId <= 0) {
+        throw Exception('ID de venta inválido: $id');
       }
-    }
-  }
 
-  Future<void> changeVentaStatus(int id, String newStatus) async {
-    try {
-      await patch('/ventas/$id', {'estado': newStatus});
-    } catch (_) {
+      print('🐾 Obteniendo venta ID: $id');
+      final response = await get('/sales/ventas/$id');
+      final venta = Venta.fromJson(response);
+      
+      // Obtener detalles completos
       try {
-        await patch('/sales/ventas/$id/status', {'Estado': newStatus});
+        final detallesProductos = await getDetallesVenta(id);
+        final detallesServicios = await getDetallesServiciosVenta(id);
+        
+        venta.detalles = detallesProductos;
+        venta.servicios = detallesServicios;
       } catch (e) {
-        throw _convertException(e);
+        print('⚠️ Error obteniendo detalles: $e');
       }
-    }
-  }
-
-  // ---------------------------
-  // Servicios
-  // ---------------------------
-  Future<List<dynamic>> getServicios() async {
-    try {
-      return await get('/servicios') as List;
-    } catch (_) {
-      try {
-        return await get('/services/servicios') as List;
-      } catch (e) {
-        throw ApiException(statusCode: 404, message: 'No se pudieron obtener los servicios.');
-      }
-    }
-  }
-
-  Future<Map<String, dynamic>> getServicioById(int id) async {
-    try {
-      return await get('/servicios/$id') as Map<String, dynamic>;
-    } catch (_) {
-      try {
-        return await get('/services/servicios/$id') as Map<String, dynamic>;
-      } catch (e) {
-        throw ApiException(statusCode: 404, message: 'No se encontró el servicio con ID $id.');
-      }
-    }
-  }
-
-  Future<List<dynamic>> searchServicios(String query) async {
-    try {
-      return await get('/servicios/search?q=$query') as List;
-    } catch (_) {
-      try {
-        return await get('/services/servicios/search?q=$query') as List;
-      } catch (e) {
-        throw ApiException(statusCode: 404, message: 'No se pudieron buscar servicios.');
-      }
-    }
-  }
-
-  // ---------------------------
-  // Notificaciones
-  // ---------------------------
-  Future<List<dynamic>> getNotificaciones() async {
-    try {
-      final userId = await getUserId();
-      return await get('/notifications/notificaciones/usuario/$userId') as List;
-    } catch (_) {
-      try {
-        return await get('/notifications/notificaciones') as List;
-      } catch (e) {
-        throw ApiException(statusCode: 404, message: 'No se pudieron obtener las notificaciones.');
-      }
-    }
-  }
-
-  Future<List<dynamic>> getUnreadNotificaciones() async {
-    try {
-      return await get('/notifications/notificaciones/unread') as List;
-    } catch (_) {
-      try {
-        final userId = await getUserId();
-        return await get('/notifications/notificaciones/usuario/$userId/unread') as List;
-      } catch (e) {
-        throw ApiException(statusCode: 404, message: 'No se pudieron obtener las notificaciones no leídas.');
-      }
-    }
-  }
-
-  Future<int> getUnreadNotificacionesCount() async {
-    try {
-      final response = await get('/notifications/notificaciones/unread/count');
-      return response['count'] as int;
-    } catch (_) {
-      try {
-        final userId = await getUserId();
-        final response = await get('/notifications/notificaciones/usuario/$userId/unread/count');
-        return response['count'] as int;
-      } catch (e) {
-        print('Error al obtener conteo de notificaciones: $e');
-        return 0;
-      }
-    }
-  }
-
-  Future<void> markNotificationAsRead(int notificacionId) async {
-    try {
-      await patch('/notifications/notificaciones/$notificacionId/read', {});
-    } catch (_) {
-      try {
-        await patch('/notifications/notificaciones/$notificacionId/read', {});
-      } catch (e) {
-        throw ApiException(statusCode: 404, message: 'No se pudo marcar la notificación como leída.');
-      }
-    }
-  }
-
-  Future<void> markAllNotificationsAsRead() async {
-    try {
-      await post('/notifications/notificaciones/mark-all-read', {});
-    } catch (_) {
-      try {
-        await post('/notifications/notificaciones/mark-all-read', {});
-      } catch (e) {
-        throw ApiException(statusCode: 404, message: 'No se pudieron marcar todas las notificaciones como leídas.');
-      }
+      
+      return venta;
+    } catch (e) {
+      print('❌ Error obteniendo venta $id: $e');
+      throw Exception('No se pudo cargar el detalle de la venta');
     }
   }
 
   // ---------------------------
-  // Citas (Versión Corregida)
+  // Detalles de Ventas (Productos)
+  // ---------------------------
+  Future<List<DetalleVenta>> getDetallesVenta(String ventaId) async {
+    try {
+      print('🐾 Obteniendo detalles de productos para venta: $ventaId');
+      final response = await get('/sales/ventas/$ventaId/detalles');
+      
+      if (response is List) {
+        return response.map((item) => DetalleVenta.fromJson(item)).toList();
+      }
+      return [];
+    } catch (e) {
+      print('❌ Error obteniendo detalles de venta $ventaId: $e');
+      return [];
+    }
+  }
+
+  // ---------------------------
+  // Detalles de Servicios en Ventas
+  // ---------------------------
+  Future<List<DetalleServicio>> getDetallesServiciosVenta(String ventaId) async {
+    try {
+      print('🐾 Obteniendo detalles de servicios para venta: $ventaId');
+      final response = await get('/sales/ventas/$ventaId/detalles-servicios');
+      
+      if (response is List) {
+        return response.map((item) => DetalleServicio.fromJson(item)).toList();
+      }
+      return [];
+    } catch (e) {
+      print('❌ Error obteniendo detalles de servicios $ventaId: $e');
+      return [];
+    }
+  }
+
+  // ---------------------------
+  // Cálculo de Métricas MEJORADO
+  // ---------------------------
+  Future<Map<String, dynamic>> calcularMetricasCompletas() async {
+    try {
+      print('🐾 Calculando métricas completas...');
+      
+      final ventas = await getVentas();
+      final citas = await getCitas();
+      final hoy = DateTime.now();
+      final inicioMes = DateTime(hoy.year, hoy.month, 1);
+      
+      // Métricas de ventas
+      double ingresosTotales = 0;
+      double ingresosHoy = 0;
+      double ingresosMes = 0;
+      int ventasCompletadas = 0;
+      int productosVendidos = 0;
+      int serviciosVendidos = 0;
+      
+      for (var venta in ventas) {
+        if (venta.estado.toLowerCase() == 'efectiva' || venta.estado.toLowerCase() == 'completado') {
+          ingresosTotales += venta.total;
+          ventasCompletadas++;
+          
+          // Contar productos y servicios
+          if (venta.detalles != null) {
+            productosVendidos += venta.detalles!.fold(0, (sum, detalle) => sum + detalle.cantidad);
+          }
+          if (venta.servicios != null) {
+            serviciosVendidos += venta.servicios!.length;
+          }
+          
+          // Ingresos de hoy
+          if (venta.fecha.year == hoy.year && 
+              venta.fecha.month == hoy.month && 
+              venta.fecha.day == hoy.day) {
+            ingresosHoy += venta.total;
+          }
+          
+          // Ingresos del mes
+          if (venta.fecha.isAfter(inicioMes) || 
+              (venta.fecha.year == hoy.year && venta.fecha.month == hoy.month)) {
+            ingresosMes += venta.total;
+          }
+        }
+      }
+      
+      // Métricas de citas
+      final citasHoy = citas.where((c) => 
+        c.fecha.year == hoy.year && 
+        c.fecha.month == hoy.month && 
+        c.fecha.day == hoy.day
+      ).length;
+      
+      final citasPendientes = citas.where((c) => 
+        c.estado.toLowerCase() == 'programada' || c.estado.toLowerCase() == 'pendiente'
+      ).length;
+      
+      final citasCompletadas = citas.where((c) => 
+        c.estado.toLowerCase() == 'completada'
+      ).length;
+      
+      double ingresosCitas = 0;
+      for (var cita in citas.where((c) => c.estado.toLowerCase() == 'completada')) {
+        ingresosCitas += cita.getPrecioTotal() ?? 0;
+      }
+      
+      final metricas = {
+        // Ventas
+        'total_ventas': ventas.length,
+        'ventas_completadas': ventasCompletadas,
+        'ingresos_totales': ingresosTotales,
+        'ingresos_hoy': ingresosHoy,
+        'ingresos_mes': ingresosMes,
+        'ticket_promedio': ventasCompletadas > 0 ? (ingresosTotales / ventasCompletadas) : 0,
+        'productos_vendidos': productosVendidos,
+        'servicios_vendidos': serviciosVendidos,
+        
+        // Citas
+        'total_citas': citas.length,
+        'citas_hoy': citasHoy,
+        'citas_pendientes': citasPendientes,
+        'citas_completadas': citasCompletadas,
+        'ingresos_citas': ingresosCitas,
+        
+        // Combinado
+        'ingresos_totales_combinados': ingresosTotales + ingresosCitas,
+        'clientes_atendidos': ventasCompletadas + citasCompletadas,
+      };
+      
+      print('📊 Métricas calculadas: ${metricas}');
+      return metricas;
+    } catch (e) {
+      print('❌ Error calculando métricas: $e');
+      return {
+        'total_ventas': 0,
+        'ventas_completadas': 0,
+        'ingresos_totales': 0.0,
+        'ingresos_hoy': 0.0,
+        'ingresos_mes': 0.0,
+        'ticket_promedio': 0.0,
+        'productos_vendidos': 0,
+        'servicios_vendidos': 0,
+        'total_citas': 0,
+        'citas_hoy': 0,
+        'citas_pendientes': 0,
+        'citas_completadas': 0,
+        'ingresos_citas': 0.0,
+        'ingresos_totales_combinados': 0.0,
+        'clientes_atendidos': 0,
+      };
+    }
+  }
+
+  Future<List<Venta>> getVentasPorEstado(String estado) async {
+    try {
+      print('🐾 Obteniendo ventas por estado: $estado');
+      final response = await get('/sales/ventas/estado/$estado');
+      
+      if (response is List) {
+        return response.map((json) => Venta.fromJson(json)).toList();
+      }
+      throw Exception('Formato de respuesta inesperado para ventas por estado');
+    } catch (e) {
+      print('❌ Error en getVentasPorEstado: $e');
+      throw Exception('No se pudieron cargar las ventas por estado');
+    }
+  }
+
+  Future<List<Venta>> getVentasPorFecha(DateTime fecha) async {
+    try {
+      print('🐾 Obteniendo ventas para filtrar por fecha: ${DateFormat('yyyy-MM-dd').format(fecha)}');
+      final todasLasVentas = await getVentas();
+      
+      final ventasFiltradas = todasLasVentas.where((venta) {
+        return venta.fecha.year == fecha.year &&
+               venta.fecha.month == fecha.month &&
+               venta.fecha.day == fecha.day;
+      }).toList();
+      
+      print('✅ Ventas filtradas por fecha: ${ventasFiltradas.length}');
+      return ventasFiltradas;
+    } catch (e) {
+      print('❌ Error en getVentasPorFecha: $e');
+      throw Exception('No se pudieron cargar las ventas por fecha');
+    }
+  }
+
+  Future<void> cambiarEstadoVenta(String id, String nuevoEstado) async {
+    try {
+      print('🐾 Cambiando estado de venta $id a: $nuevoEstado');
+      await patch('/sales/ventas/$id/status', {'estado': nuevoEstado});
+      print('✅ Estado cambiado exitosamente');
+    } catch (e) {
+      print('❌ Error cambiando estado: $e');
+      throw Exception('No se pudo cambiar el estado de la venta');
+    }
+  }
+
+  Future<Venta> createVenta(Map<String, dynamic> ventaData) async {
+    try {
+      print('🐾 Creando nueva venta');
+      final response = await post('/sales/ventas', ventaData);
+      print('✅ Venta creada exitosamente');
+      return Venta.fromJson(response);
+    } catch (e) {
+      print('❌ Error creando venta: $e');
+      throw Exception('No se pudo crear la venta');
+    }
+  }
+
+  
+
+  // ---------------------------
+  // Productos bajo stock
+  // ---------------------------
+  Future<List<Map<String, dynamic>>> getProductosBajoStock() async {
+    try {
+      final response = await get('/inventory/productos/bajo-stock');
+      if (response is List) {
+        return List<Map<String, dynamic>>.from(response);
+      }
+      return [];
+    } catch (e) {
+      print('❌ Error obteniendo productos bajo stock: $e');
+      return [];
+    }
+  }
+
+  // ---------------------------
+  // Productos más vendidos
+  // ---------------------------
+  Future<List<Map<String, dynamic>>> getProductosMasVendidos() async {
+    try {
+      final response = await get('/reports/productos/mas-vendidos');
+      if (response is List) {
+        return List<Map<String, dynamic>>.from(response);
+      }
+      return [];
+    } catch (e) {
+      print('❌ Error obteniendo productos más vendidos: $e');
+      return [];
+    }
+  }
+
+  // ---------------------------
+  // Mascotas
+  // ---------------------------
+  Future<List<dynamic>> getMascotas() async {
+    try {
+      print('🐾 Obteniendo mascotas desde: $baseUrl/pets/mascotas');
+      final response = await get('/pets/mascotas');
+      
+      if (response == null) {
+        print('❌ La respuesta del servidor es nula para mascotas');
+        return [];
+      }
+
+      // Manejar diferentes formatos de respuesta
+      List<dynamic> mascotasData;
+      if (response is Map && response.containsKey('data')) {
+        mascotasData = response['data'] as List;
+      } else if (response is Map && response.containsKey('mascotas')) {
+        mascotasData = response['mascotas'] as List;
+      } else if (response is List) {
+        mascotasData = response;
+      } else {
+        print('❌ Formato de respuesta inesperado para mascotas: $response');
+        return [];
+      }
+
+      print('✅ Mascotas cargadas exitosamente: ${mascotasData.length}');
+      return mascotasData;
+    } catch (e, stackTrace) {
+      print('❌ Error en getMascotas: $e');
+      print('📍 Stack trace: $stackTrace');
+      return [];
+    }
+  }
+
+  Future<dynamic> getMascotaById(int mascotaId) async {
+    try {
+      print('🐾 Obteniendo mascota ID: $mascotaId');
+      final response = await get('/pets/mascotas/$mascotaId');
+      return response;
+    } catch (e) {
+      print('❌ Error obteniendo mascota $mascotaId: $e');
+      throw Exception('No se pudo obtener la mascota');
+    }
+  }
+
+  // ---------------------------
+  // Citas
   // ---------------------------
   Future<List<Cita>> getCitas() async {
     try {
       final response = await get('/appointments/citas');
-      return List<Cita>.from(response.map((cita) => Cita.fromJson(cita)));
-    } catch (e) {
-      print('Error al obtener citas: $e');
+      if (response is List) {
+        return response.map((c) => Cita.fromJson(c)).toList();
+      }
       throw ApiException(
-        statusCode: 404, 
-        message: 'No se pudieron obtener las citas. Error: ${e.toString()}'
+        statusCode: 500,
+        message: 'Formato de respuesta inesperado para citas'
       );
+    } catch (e) {
+      throw _convertException(e);
+    }
+  }
+
+  Future<List<Cita>> getCitasPorFecha(String fecha) async {
+    try {
+      final response = await get('/appointments/citas/fecha/$fecha');
+      
+      if (response is List) {
+        return response.map((c) => Cita.fromJson(c)).toList();
+      }
+      throw ApiException(
+        statusCode: 500,
+        message: 'Formato de respuesta inesperado para citas por fecha'
+      );
+    } catch (e) {
+      throw _convertException(e);
+    }
+  }
+
+  Future<List<Cita>> getCitasPorEstado(String estado) async {
+    try {
+      final response = await get('/appointments/citas/estado/$estado');
+      
+      if (response is List) {
+        return response.map((c) => Cita.fromJson(c)).toList();
+      }
+      throw ApiException(
+        statusCode: 500,
+        message: 'Formato de respuesta inesperado para citas por estado'
+      );
+    } catch (e) {
+      throw _convertException(e);
     }
   }
 
@@ -350,45 +612,17 @@ class ApiService {
     List<int> servicios = const [],
   }) async {
     try {
-      // Verificar disponibilidad primero
-      final disponibilidad = await checkDisponibilidad(fecha, hora, duracion);
-      
-      if (disponibilidad['disponible'] != true) {
-        throw ApiException(
-          statusCode: 400,
-          message: 'No hay disponibilidad: ${disponibilidad['mensaje'] ?? 'Horario no disponible'}'
-        );
-      }
-
-      // Crear el objeto cita
-      final citaData = {
+      final response = await post('/appointments/citas', {
         'fecha': fecha,
         'hora': hora,
         'duracion': duracion,
         'mascotaId': mascotaId,
         'notas': notas,
         'servicios': servicios,
-      };
-
-      // Enviar la solicitud
-      final response = await post('/appointments/citas', citaData);
-      
-      // Procesar la respuesta
-      if (response is Map<String, dynamic>) {
-        return Cita.fromJson(response);
-      } else {
-        throw ApiException(
-          statusCode: 500,
-          message: 'Formato de respuesta inválido al crear cita'
-        );
-      }
+      });
+      return Cita.fromJson(response);
     } catch (e) {
-      print('Error al crear cita: $e');
-      if (e is ApiException) rethrow;
-      throw ApiException(
-        statusCode: 500, 
-        message: 'Error al crear la cita: ${e.toString()}'
-      );
+      throw _convertException(e);
     }
   }
 
@@ -397,92 +631,7 @@ class ApiService {
       final response = await get('/appointments/citas/$id');
       return Cita.fromJson(response);
     } catch (e) {
-      print('Error al obtener cita por ID: $e');
-      throw ApiException(statusCode: 404, message: 'No se encontró la cita con ID $id.');
-    }
-  }
-
-  Future<List<Cita>> getCitasByCliente(int clienteId) async {
-    try {
-      final response = await get('/appointments/citas/cliente/$clienteId');
-      return List<Cita>.from(response.map((cita) => Cita.fromJson(cita)));
-    } catch (e) {
-      print('Error al obtener citas por cliente: $e');
-      throw ApiException(statusCode: 404, message: 'No se pudieron obtener las citas del cliente.');
-    }
-  }
-
-  Future<List<Cita>> getCitasByMascota(int mascotaId) async {
-    try {
-      final response = await get('/appointments/citas/mascota/$mascotaId');
-      return List<Cita>.from(response.map((cita) => Cita.fromJson(cita)));
-    } catch (e) {
-      print('Error al obtener citas por mascota: $e');
-      throw ApiException(statusCode: 404, message: 'No se pudieron obtener las citas de la mascota.');
-    }
-  }
-
-  Future<List<Cita>> getCitasByFecha(String fecha) async {
-    try {
-      final response = await get('/appointments/citas/fecha/$fecha');
-      return List<Cita>.from(response.map((cita) => Cita.fromJson(cita)));
-    } catch (e) {
-      print('Error al obtener citas por fecha: $e');
-      throw ApiException(statusCode: 404, message: 'No se pudieron obtener las citas para la fecha especificada.');
-    }
-  }
-
-  Future<List<Cita>> getCitasByRangoFechas(String fechaInicio, String fechaFin) async {
-    try {
-      final response = await get('/appointments/citas/rango-fechas?fechaInicio=$fechaInicio&fechaFin=$fechaFin');
-      return List<Cita>.from(response.map((cita) => Cita.fromJson(cita)));
-    } catch (e) {
-      print('Error al obtener citas por rango de fechas: $e');
-      throw ApiException(statusCode: 404, message: 'No se pudieron obtener las citas para el rango de fechas especificado.');
-    }
-  }
-
-  Future<List<Cita>> getCitasByEstado(String estado) async {
-    try {
-      final response = await get('/appointments/citas/estado/$estado');
-      return List<Cita>.from(response.map((cita) => Cita.fromJson(cita)));
-    } catch (e) {
-      print('Error al obtener citas por estado: $e');
-      throw ApiException(statusCode: 404, message: 'No se pudieron obtener las citas con el estado especificado.');
-    }
-  }
-
-  Future<Map<String, dynamic>> checkDisponibilidad(String fecha, String hora, int duracion) async {
-    try {
-      final response = await post('/appointments/citas/disponibilidad', {
-        'fecha': fecha,
-        'hora': hora,
-        'duracion': duracion,
-      });
-      
-      return {
-        'disponible': response['disponible'] ?? false,
-        'mensaje': response['mensaje'] ?? '',
-      };
-    } catch (e) {
-      print('Error al verificar disponibilidad: $e');
-      throw ApiException(
-        statusCode: 500, 
-        message: 'Error verificando disponibilidad: ${e.toString()}'
-      );
-    }
-  }
-
-  Future<Cita> updateCita(int id, Map<String, dynamic> citaData) async {
-    try {
-      final response = await put('/appointments/citas/$id', citaData);
-      return Cita.fromJson(response);
-    } catch (e) {
-      print('Error al actualizar cita: $e');
-      throw ApiException(
-        statusCode: 500, 
-        message: 'No se pudo actualizar la cita. Error: ${e.toString()}'
-      );
+      throw _convertException(e);
     }
   }
 
@@ -492,11 +641,7 @@ class ApiService {
         'estado': nuevoEstado,
       });
     } catch (e) {
-      print('Error al cambiar estado de cita: $e');
-      throw ApiException(
-        statusCode: 500, 
-        message: 'No se pudo cambiar el estado. Error: ${e.toString()}'
-      );
+      throw _convertException(e);
     }
   }
 
@@ -504,47 +649,34 @@ class ApiService {
     try {
       await delete('/appointments/citas/$id');
     } catch (e) {
-      print('Error al eliminar cita: $e');
-      throw ApiException(
-        statusCode: 500, 
-        message: 'No se pudo eliminar la cita. Error: ${e.toString()}'
-      );
+      throw _convertException(e);
     }
   }
 
-  Future<List<dynamic>> getServiciosByCita(int citaId) async {
+  // ---------------------------
+  // Servicios
+  // ---------------------------
+  Future<List<dynamic>> getServicios() async {
     try {
-      return await get('/appointments/citas/$citaId/servicios') as List;
+      return await get('/services/servicios') as List;
     } catch (e) {
-      print('Error al obtener servicios de cita: $e');
-      throw ApiException(
-        statusCode: 404, 
-        message: 'No se pudieron obtener los servicios. Error: ${e.toString()}'
-      );
+      throw _convertException(e);
     }
   }
 
-  Future<void> addServicioToCita(int citaId, int servicioId) async {
+  Future<Map<String, dynamic>> getServicioById(int servicioId) async {
     try {
-      await post('/appointments/citas/$citaId/servicios/$servicioId', {});
+      return await get('/services/servicios/$servicioId') as Map<String, dynamic>;
     } catch (e) {
-      print('Error al agregar servicio a cita: $e');
-      throw ApiException(
-        statusCode: 500, 
-        message: 'No se pudo agregar el servicio. Error: ${e.toString()}'
-      );
+      throw _convertException(e);
     }
   }
 
-  Future<void> removeServicioFromCita(int citaId, int servicioId) async {
+  Future<List<dynamic>> searchServicios(String query) async {
     try {
-      await delete('/appointments/citas/$citaId/servicios/$servicioId');
+      return await get('/services/servicios/search?q=$query') as List;
     } catch (e) {
-      print('Error al eliminar servicio de cita: $e');
-      throw ApiException(
-        statusCode: 500, 
-        message: 'No se pudo eliminar el servicio. Error: ${e.toString()}'
-      );
+      throw _convertException(e);
     }
   }
 
@@ -565,33 +697,421 @@ class ApiService {
   Future<Map<String, dynamic>> getUserProfile() async {
     try {
       final userId = await getUserId();
-      return await get('/users/usuarios/$userId') as Map<String, dynamic>;
+      return await get('/auth/usuarios/$userId') as Map<String, dynamic>;
     } catch (e) {
-      print('Error al obtener perfil de usuario: $e');
-      throw ApiException(statusCode: 404, message: 'No se pudo obtener el perfil del usuario.');
+      throw _convertException(e);
     }
   }
 
   Future<void> updateUserProfile(Map<String, dynamic> userData) async {
     try {
       final userId = await getUserId();
-      await put('/users/usuarios/$userId', userData);
+      await put('/auth/usuarios/$userId', userData);
     } catch (e) {
-      print('Error al actualizar perfil de usuario: $e');
-      throw ApiException(statusCode: 500, message: 'No se pudo actualizar el perfil del usuario.');
+      throw _convertException(e);
     }
   }
 
   Future<void> changePassword(String currentPassword, String newPassword) async {
     try {
       final userId = await getUserId();
-      await post('/users/usuarios/$userId/change-password', {
+      await post('/auth/usuarios/$userId/change-password', {
         'currentPassword': currentPassword,
         'newPassword': newPassword,
       });
     } catch (e) {
-      print('Error al cambiar contraseña: $e');
-      throw ApiException(statusCode: 500, message: 'No se pudo cambiar la contraseña.');
+      throw _convertException(e);
+    }
+  }
+
+  // ---------------------------
+  // Notificaciones
+  // ---------------------------
+  Future<int> getUnreadNotificacionesCount() async {
+    try {
+      final response = await get('/notifications/notificaciones/unread/count');
+      return response['count'] as int;
+    } catch (e) {
+      // Retorna 0 si falla
+      return 0;
+    }
+  }
+
+  Future<List<dynamic>> getNotificaciones() async {
+    try {
+      return await get('/notifications/notificaciones') as List;
+    } catch (e) {
+      // Retorna lista vacía si falla
+      return [];
+    }
+  }
+
+  Future<void> markAllNotificationsAsRead() async {
+    try {
+      await post('/notifications/notificaciones/mark-all-read', {});
+    } catch (e) {
+      // Silencia el error
+      print('Error marcando notificaciones como leídas: $e');
+    }
+  }
+
+  Future<void> markNotificationAsRead(int notificacionId) async {
+    try {
+      await patch('/notifications/notificaciones/$notificacionId/read', {});
+    } catch (e) {
+      // Silencia el error
+      print('Error marcando notificación como leída: $e');
+    }
+  }
+
+  // ---------------------------
+  // Informes y Métricas
+  // ---------------------------
+  Future<Map<String, dynamic>> getMetricasCitas() async {
+    try {
+      print('🐾 Obteniendo métricas de citas');
+      final response = await get('/reports/citas/metricas');
+      
+      if (response is Map<String, dynamic>) {
+        return response;
+      }
+      
+      // Calcular métricas localmente si falla
+      return await _calcularMetricasCitas();
+    } catch (e) {
+      print('❌ Error en getMetricasCitas: $e');
+      return await _calcularMetricasCitas();
+    }
+  }
+
+  Future<Map<String, dynamic>> getMetricasVentas() async {
+    try {
+      print('🐾 Obteniendo métricas de ventas');
+      final response = await get('/reports/ventas/metricas');
+      
+      if (response is Map<String, dynamic>) {
+        return response;
+      }
+      
+      // Calcular métricas localmente si falla
+      return await _calcularMetricasVentas();
+    } catch (e) {
+      print('❌ Error en getMetricasVentas: $e');
+      return await _calcularMetricasVentas();
+    }
+  }
+
+  // Métodos auxiliares para calcular métricas localmente
+  Future<Map<String, dynamic>> _calcularMetricasCitas() async {
+    try {
+      final citas = await getCitas();
+      final hoy = DateTime.now();
+      final citasHoy = citas.where((c) => 
+        c.fecha.year == hoy.year && 
+        c.fecha.month == hoy.month && 
+        c.fecha.day == hoy.day
+      ).toList();
+      
+      final citasPendientes = citas.where((c) => c.estado == 'Programada').length;
+      final citasCompletadas = citas.where((c) => c.estado == 'Completada').length;
+      final citasCanceladas = citas.where((c) => c.estado == 'Cancelada').length;
+      
+      double ingresosCitas = 0;
+      for (var cita in citas.where((c) => c.estado == 'Completada')) {
+        ingresosCitas += cita.getPrecioTotal() ?? 0;
+      }
+      
+      return {
+        'total_citas': citas.length,
+        'citas_hoy': citasHoy.length,
+        'citas_pendientes': citasPendientes,
+        'citas_completadas': citasCompletadas,
+        'citas_canceladas': citasCanceladas,
+        'ingresos_citas': ingresosCitas,
+        'promedio_diario': citas.isNotEmpty ? (citas.length / 30).toDouble() : 0,
+      };
+    } catch (e) {
+      print('❌ Error calculando métricas de citas: $e');
+      return {
+        'total_citas': 0,
+        'citas_hoy': 0,
+        'citas_pendientes': 0,
+        'citas_completadas': 0,
+        'citas_canceladas': 0,
+        'ingresos_citas': 0.0,
+        'promedio_diario': 0.0,
+      };
+    }
+  }
+
+  Future<Map<String, dynamic>> _calcularMetricasVentas() async {
+    try {
+      final ventas = await getVentas();
+      final hoy = DateTime.now();
+      final ventasHoy = ventas.where((v) => 
+        v.fecha.year == hoy.year && 
+        v.fecha.month == hoy.month && 
+        v.fecha.day == hoy.day
+      ).toList();
+      
+      double ingresosTotales = 0;
+      double ingresosHoy = 0;
+      int productosVendidos = 0;
+      int serviciosVendidos = 0;
+      
+      for (var venta in ventas) {
+        ingresosTotales += venta.total;
+        
+        if (venta.fecha.year == hoy.year && 
+            venta.fecha.month == hoy.month && 
+            venta.fecha.day == hoy.day) {
+          ingresosHoy += venta.total;
+        }
+        
+        if (venta.detalles != null) {
+          productosVendidos += venta.detalles!.length;
+        }
+        
+        if (venta.servicios != null) {
+          serviciosVendidos += venta.servicios!.length;
+        }
+      }
+      
+      return {
+        'total_ventas': ventas.length,
+        'ventas_hoy': ventasHoy.length,
+        'ingresos_totales': ingresosTotales,
+        'ingresos_hoy': ingresosHoy,
+        'ticket_promedio': ventas.isNotEmpty ? (ingresosTotales / ventas.length) : 0,
+        'productos_vendidos': productosVendidos,
+        'servicios_vendidos': serviciosVendidos,
+      };
+    } catch (e) {
+      print('❌ Error calculando métricas de ventas: $e');
+      return {
+        'total_ventas': 0,
+        'ventas_hoy': 0,
+        'ingresos_totales': 0.0,
+        'ingresos_hoy': 0.0,
+        'ticket_promedio': 0.0,
+        'productos_vendidos': 0,
+        'servicios_vendidos': 0,
+      };
+    }
+  }
+
+  // ---------------------------
+  // Métodos que faltaban para home_screen
+  // ---------------------------
+  Future<List<dynamic>> getVentasRecientes({int limit = 5}) async {
+    try {
+      print('🐾 Obteniendo ventas recientes (límite: $limit)');
+      
+      // Obtener todas las ventas y tomar las más recientes
+      final todasLasVentas = await getVentas();
+      final ventasOrdenadas = todasLasVentas.toList()
+        ..sort((a, b) => b.fecha.compareTo(a.fecha));
+      
+      return ventasOrdenadas.take(limit).map((venta) => {
+        'id': venta.id,
+        'cliente': venta.cliente ?? 'Cliente',
+        'fecha': venta.fecha.toIso8601String(),
+        'total': venta.total,
+        'estado': venta.estado,
+      }).toList();
+    } catch (e) {
+      print('❌ Error en getVentasRecientes: $e');
+      return [];
+    }
+  }
+
+  Future<List<dynamic>> getCitasRecientes({int limit = 5}) async {
+    try {
+      print('🐾 Obteniendo citas recientes (límite: $limit)');
+      
+      // Obtener todas las citas y tomar las más recientes
+      final todasLasCitas = await getCitas();
+      final citasOrdenadas = todasLasCitas.toList()
+        ..sort((a, b) => b.fecha.compareTo(a.fecha));
+      
+      return citasOrdenadas.take(limit).map((cita) => {
+        'id': cita.id,
+        'mascota': cita.mascota?.nombre ?? 'Mascota',
+        'fecha': cita.fecha.toIso8601String(),
+        'estado': cita.estado,
+        'hora': cita.hora,
+      }).toList();
+    } catch (e) {
+      print('❌ Error en getCitasRecientes: $e');
+      return [];
+    }
+  }
+
+  // ---------------------------
+  // Métodos para notificaciones de stock
+  // ---------------------------
+  Future<List<dynamic>> getNotificacionesStock() async {
+    try {
+      print('🐾 Obteniendo notificaciones de stock');
+      final response = await get('/inventory/stock/notifications');
+      
+      if (response is List) {
+        return response;
+      } else if (response is Map && response.containsKey('data')) {
+        return response['data'] as List;
+      }
+      
+      // Si no hay endpoint específico, generar notificaciones de prueba
+      return _getNotificacionesStockPrueba();
+    } catch (e) {
+      print('❌ Error en getNotificacionesStock: $e');
+      return _getNotificacionesStockPrueba();
+    }
+  }
+
+  Future<List<dynamic>> getProductosProximosVencer() async {
+    try {
+      print('🐾 Obteniendo productos próximos a vencer');
+      final response = await get('/inventory/productos/proximos-vencer');
+      
+      if (response is List) {
+        return response;
+      } else if (response is Map && response.containsKey('data')) {
+        return response['data'] as List;
+      }
+      
+      return _getProductosProximosVencerPrueba();
+    } catch (e) {
+      print('❌ Error en getProductosProximosVencer: $e');
+      return _getProductosProximosVencerPrueba();
+    }
+  }
+
+  Future<List<dynamic>> getProductosStockBajo() async {
+    try {
+      print('🐾 Obteniendo productos con stock bajo');
+      final response = await get('/inventory/productos/stock-bajo');
+      
+      if (response is List) {
+        return response;
+      } else if (response is Map && response.containsKey('data')) {
+        return response['data'] as List;
+      }
+      
+      return _getProductosStockBajoPrueba();
+    } catch (e) {
+      print('❌ Error en getProductosStockBajo: $e');
+      return _getProductosStockBajoPrueba();
+    }
+  }
+
+  // ---------------------------
+  // Datos de prueba para notificaciones de stock
+  // ---------------------------
+  List<dynamic> _getNotificacionesStockPrueba() {
+    return [
+      {
+        'id_notificacion': 100,
+        'tipo_notificacion': 'Stock',
+        'titulo': 'Stock bajo: Alimento Premium Gatos',
+        'mensaje': 'Quedan solo 5 unidades de Alimento Premium Gatos. Es recomendable realizar un nuevo pedido.',
+        'prioridad': 'Alta',
+        'estado': 'Pendiente',
+        'fecha_creacion': DateTime.now().subtract(const Duration(hours: 1)).toIso8601String(),
+        'tabla_referencia': 'productos',
+        'id_referencia': 1,
+      },
+      {
+        'id_notificacion': 101,
+        'tipo_notificacion': 'Vencimiento',
+        'titulo': 'Producto próximo a vencer',
+        'mensaje': 'El lote de Antibiótico para perros vence en 7 días (${DateFormat('dd/MM/yyyy').format(DateTime.now().add(const Duration(days: 7)))})',
+        'prioridad': 'Media',
+        'estado': 'Pendiente',
+        'fecha_creacion': DateTime.now().subtract(const Duration(hours: 3)).toIso8601String(),
+        'tabla_referencia': 'productos',
+        'id_referencia': 2,
+      },
+      {
+        'id_notificacion': 102,
+        'tipo_notificacion': 'Stock',
+        'titulo': 'Stock crítico: Vacuna Antirrábica',
+        'mensaje': 'Solo quedan 2 dosis de Vacuna Antirrábica. Stock crítico.',
+        'prioridad': 'Alta',
+        'estado': 'Pendiente',
+        'fecha_creacion': DateTime.now().subtract(const Duration(minutes: 30)).toIso8601String(),
+        'tabla_referencia': 'productos',
+        'id_referencia': 3,
+      },
+    ];
+  }
+
+  List<dynamic> _getProductosProximosVencerPrueba() {
+    return [
+      {
+        'id': 1,
+        'nombre': 'Antibiótico para perros',
+        'lote': 'AB2024001',
+        'fecha_vencimiento': DateTime.now().add(const Duration(days: 7)).toIso8601String(),
+        'cantidad': 15,
+        'dias_restantes': 7,
+      },
+      {
+        'id': 2,
+        'nombre': 'Vitaminas para gatos',
+        'lote': 'VIT2024002',
+        'fecha_vencimiento': DateTime.now().add(const Duration(days: 14)).toIso8601String(),
+        'cantidad': 8,
+        'dias_restantes': 14,
+      },
+    ];
+  }
+
+  List<dynamic> _getProductosStockBajoPrueba() {
+    return [
+      {
+        'id': 1,
+        'nombre': 'Alimento Premium Gatos',
+        'stock_actual': 5,
+        'stock_minimo': 10,
+        'categoria': 'Alimentos',
+        'precio': 35000.0,
+      },
+      {
+        'id': 2,
+        'nombre': 'Vacuna Antirrábica',
+        'stock_actual': 2,
+        'stock_minimo': 5,
+        'categoria': 'Medicamentos',
+        'precio': 45000.0,
+      },
+    ];
+  }
+
+  // ---------------------------
+  // Método para crear notificaciones automáticas
+  // ---------------------------
+  Future<void> crearNotificacionesAutomaticas() async {
+    try {
+      print('🐾 Creando notificaciones automáticas de stock');
+      
+      // Obtener productos con stock bajo
+      final productosStockBajo = await getProductosStockBajo();
+      
+      for (var producto in productosStockBajo) {
+        await post('/notifications/notificaciones', {
+          'tipo_notificacion': 'Stock',
+          'titulo': 'Stock bajo: ${producto['nombre']}',
+          'mensaje': 'Quedan solo ${producto['stock_actual']} unidades de ${producto['nombre']}. Stock mínimo: ${producto['stock_minimo']}',
+          'prioridad': producto['stock_actual'] <= 2 ? 'Alta' : 'Media',
+          'tabla_referencia': 'productos',
+          'id_referencia': producto['id'],
+        });
+      }
+      
+      print('✅ Notificaciones automáticas creadas');
+    } catch (e) {
+      print('❌ Error creando notificaciones automáticas: $e');
     }
   }
 }

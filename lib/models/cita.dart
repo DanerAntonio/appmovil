@@ -50,6 +50,14 @@ class Cita {
     );
   }
 
+  get id => null;
+
+  get mascotaNombre => null;
+
+  get hora => null;
+
+  get mascota => null;
+
   Map<String, dynamic> toJson() {
     return {
       'IdCliente': idCliente,

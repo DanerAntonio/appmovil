@@ -14,21 +14,20 @@ class AppDrawer extends StatefulWidget {
 
 class _AppDrawerState extends State<AppDrawer> {
   int _unreadCount = 0;
-  final ApiService _apiService = ApiService();
+  late ApiService _apiService;
   bool _isLoadingCount = true;
 
   @override
   void initState() {
     super.initState();
+    _apiService = ApiService();
     _loadUnreadCount();
   }
 
   Future<void> _loadUnreadCount() async {
     if (!mounted) return;
     
-    setState(() {
-      _isLoadingCount = true;
-    });
+    setState(() => _isLoadingCount = true);
     
     try {
       final count = await _apiService.getUnreadNotificacionesCount();
@@ -41,21 +40,19 @@ class _AppDrawerState extends State<AppDrawer> {
     } catch (e) {
       print('Error al cargar conteo de notificaciones: $e');
       if (mounted) {
-        setState(() {
-          _isLoadingCount = false;
-        });
+        setState(() => _isLoadingCount = false);
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final authService = Provider.of<AuthService>(context);
+    final authService = Provider.of<AuthService>(context, listen: false);
     final userData = authService.userData;
     
     return Drawer(
       child: Container(
-        decoration: BoxDecoration(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
@@ -68,10 +65,9 @@ class _AppDrawerState extends State<AppDrawer> {
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            // Encabezado del drawer
             UserAccountsDrawerHeader(
               decoration: const BoxDecoration(
-                color: AppTheme.primaryColor,
+                color: Color.fromARGB(255, 76, 142, 147),
                 image: DecorationImage(
                   image: AssetImage('assets/images/fondo teo.jpeg'),
                   fit: BoxFit.cover,
@@ -101,35 +97,36 @@ class _AppDrawerState extends State<AppDrawer> {
               context,
               icon: Icons.home,
               title: 'Inicio',
-              route: '/home',
+              route: '/informes',
             ),
-            
+
             _buildMenuItem(
               context,
-              icon: Icons.shopping_cart,
+              icon: Icons.store,
               title: 'Ventas',
               route: '/ventas',
             ),
             
             _buildMenuItem(
               context,
-              icon: Icons.pets,
-              title: 'Servicios',
-              route: '/servicios',
+              icon: Icons.insert_chart,
+              title: 'Informes',
+              route: '/informes',
             ),
-            
+
             _buildMenuItem(
               context,
               icon: Icons.pets,
-              title: 'Cita',
+              title: 'Citas',
               route: '/citas',
             ),
+            
             // Notificaciones con contador
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
                 color: ModalRoute.of(context)?.settings.name == '/notificaciones' 
-                    ? AppTheme.primaryColor.withOpacity(0.1) 
+                    ? const Color.fromARGB(255, 76, 136, 147).withOpacity(0.1) 
                     : Colors.transparent,
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -185,7 +182,7 @@ class _AppDrawerState extends State<AppDrawer> {
                   'Notificaciones',
                   style: TextStyle(
                     color: ModalRoute.of(context)?.settings.name == '/notificaciones'
-                        ? AppTheme.primaryColor
+                        ? const Color.fromARGB(255, 76, 146, 147)
                         : Colors.grey[800],
                     fontWeight: ModalRoute.of(context)?.settings.name == '/notificaciones'
                         ? FontWeight.bold
@@ -207,8 +204,6 @@ class _AppDrawerState extends State<AppDrawer> {
               ),
             ),
             
-           
-            
             const Divider(),
             
             // Cerrar sesión
@@ -224,7 +219,6 @@ class _AppDrawerState extends State<AppDrawer> {
                 ),
               ),
               onTap: () async {
-                // Mostrar diálogo de confirmación
                 final confirm = await showDialog<bool>(
                   context: context,
                   builder: (context) => AlertDialog(
@@ -268,25 +262,31 @@ class _AppDrawerState extends State<AppDrawer> {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: isCurrentRoute ? AppTheme.primaryColor.withOpacity(0.1) : Colors.transparent,
+        color: isCurrentRoute 
+            ? const Color.fromARGB(255, 76, 147, 141).withOpacity(0.1) 
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(8),
       ),
       child: ListTile(
         leading: Icon(
           icon,
-          color: isCurrentRoute ? AppTheme.primaryColor : Colors.grey[700],
+          color: isCurrentRoute 
+              ? const Color.fromARGB(255, 76, 136, 147) 
+              : Colors.grey[700],
         ),
         title: Text(
           title,
           style: TextStyle(
-            color: isCurrentRoute ? AppTheme.primaryColor : Colors.grey[800],
+            color: isCurrentRoute 
+                ? const Color.fromARGB(255, 76, 129, 147) 
+                : Colors.grey[800],
             fontWeight: isCurrentRoute ? FontWeight.bold : FontWeight.normal,
           ),
         ),
         onTap: () {
           Navigator.of(context).pop();
           if (!isCurrentRoute) {
-            Navigator.of(context).pushReplacementNamed(route);
+            Navigator.pushReplacementNamed(context, route);
           }
         },
       ),

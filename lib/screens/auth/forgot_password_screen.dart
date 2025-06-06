@@ -32,7 +32,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
 
     try {
       final apiService = ApiService();
-      await apiService.post('/auth/request-reset', {
+      await apiService.post('/auth/reset-password', {
         'correo': _emailController.text,
       });
 

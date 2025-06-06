@@ -1,5 +1,5 @@
-// models/notificacion.dart
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
 class Notificacion {
   final int idNotificacion;
@@ -34,93 +34,144 @@ class Notificacion {
 
   factory Notificacion.fromJson(Map<String, dynamic> json) {
     return Notificacion(
-      idNotificacion: json['IdNotificacion'] ?? 0,
-      tipoNotificacion: json['TipoNotificacion'] ?? '',
-      titulo: json['Titulo'] ?? '',
-      mensaje: json['Mensaje'] ?? '',
-      prioridad: json['Prioridad'] ?? 'Media',
-      estado: json['Estado'] ?? 'Pendiente',
-      fechaCreacion: json['FechaCreacion'] != null 
-        ? DateTime.parse(json['FechaCreacion']) 
-        : DateTime.now(),
-      fechaVista: json['FechaVista'] != null 
-        ? DateTime.parse(json['FechaVista']) 
-        : null,
-      fechaResuelta: json['FechaResuelta'] != null 
-        ? DateTime.parse(json['FechaResuelta']) 
-        : null,
-      tablaReferencia: json['TablaReferencia'],
-      idReferencia: json['IdReferencia'],
-      nombreUsuario: json['NombreUsuario'],
-      apellidoUsuario: json['ApellidoUsuario'],
+      idNotificacion: json['id_notificacion'] ?? json['id'] ?? 0,
+      tipoNotificacion: json['tipo_notificacion'] ?? json['tipo'] ?? 'Sistema',
+      titulo: json['titulo'] ?? '',
+      mensaje: json['mensaje'] ?? '',
+      prioridad: json['prioridad'] ?? 'Media',
+      estado: json['estado'] ?? 'Pendiente',
+      fechaCreacion: DateTime.parse(
+        json['fecha_creacion'] ?? 
+        json['fechaCreacion'] ?? 
+        DateTime.now().toIso8601String()
+      ),
+      fechaVista: json['fecha_vista'] != null 
+          ? DateTime.parse(json['fecha_vista']) 
+          : null,
+      fechaResuelta: json['fecha_resuelta'] != null 
+          ? DateTime.parse(json['fecha_resuelta']) 
+          : null,
+      tablaReferencia: json['tabla_referencia'],
+      idReferencia: json['id_referencia'],
+      nombreUsuario: json['nombre_usuario'],
+      apellidoUsuario: json['apellido_usuario'],
     );
   }
 
-  // Método para obtener el ícono según el tipo de notificación
+  Map<String, dynamic> toJson() {
+    return {
+      'id_notificacion': idNotificacion,
+      'tipo_notificacion': tipoNotificacion,
+      'titulo': titulo,
+      'mensaje': mensaje,
+      'prioridad': prioridad,
+      'estado': estado,
+      'fecha_creacion': fechaCreacion.toIso8601String(),
+      'fecha_vista': fechaVista?.toIso8601String(),
+      'fecha_resuelta': fechaResuelta?.toIso8601String(),
+      'tabla_referencia': tablaReferencia,
+      'id_referencia': idReferencia,
+      'nombre_usuario': nombreUsuario,
+      'apellido_usuario': apellidoUsuario,
+    };
+  }
+
+  // Métodos auxiliares para la UI
+  Color getPriorityColor() {
+    switch (prioridad.toLowerCase()) {
+      case 'alta':
+        return const Color(0xFFEF4444);
+      case 'media':
+        return const Color(0xFFF59E0B);
+      case 'baja':
+        return const Color(0xFF10B981);
+      default:
+        return const Color.fromARGB(255, 76, 142, 147);
+    }
+  }
+
+  Color getStatusColor() {
+    switch (estado.toLowerCase()) {
+      case 'pendiente':
+        return const Color(0xFFF59E0B);
+      case 'vista':
+        return const Color(0xFF10B981);
+      case 'resuelta':
+        return const Color(0xFF6366F1);
+      default:
+        return const Color(0xFF64748B);
+    }
+  }
+
   IconData getIconData() {
-    switch (tipoNotificacion) {
-      case 'StockBajo':
-        return Icons.inventory_2;
-      case 'Vencimiento':
-        return Icons.event_busy;
-      case 'Comprobante':
-        return Icons.receipt;
-      case 'ReseñaProducto':
-        return Icons.star;
-      case 'ReseñaServicio':
-        return Icons.star_half;
-      case 'ReseñaGeneral':
-        return Icons.star_border;
-      case 'Cita':
+    switch (tipoNotificacion.toLowerCase()) {
+      case 'venta':
+        return Icons.shopping_cart;
+      case 'cita':
         return Icons.calendar_today;
+      case 'sistema':
+        return Icons.pets;
+      case 'recordatorio':
+        return Icons.alarm;
       default:
         return Icons.notifications;
     }
   }
 
-  // Método para obtener el color según la prioridad
-  Color getPriorityColor() {
-    switch (prioridad.toLowerCase()) {
-      case 'alta':
-        return Colors.red;
-      case 'media':
-        return Colors.orange;
-      case 'baja':
-        return Colors.green;
-      default:
-        return Colors.blue;
-    }
-  }
-
-  // Método para obtener el color según el estado
-  Color getStatusColor() {
-    switch (estado.toLowerCase()) {
-      case 'pendiente':
-        return Colors.orange;
-      case 'vista':
-        return Colors.blue;
-      case 'resuelta':
-        return Colors.green;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  // Método para formatear la fecha de creación de forma relativa
   String getFormattedDate() {
+    return DateFormat('dd/MM/yyyy HH:mm').format(fechaCreacion);
+  }
+
+  // Método que faltaba implementar
+  String getTimeAgo() {
     final now = DateTime.now();
     final difference = now.difference(fechaCreacion);
-
-    if (difference.inDays > 7) {
-      return '${fechaCreacion.day}/${fechaCreacion.month}/${fechaCreacion.year}';
-    } else if (difference.inDays > 0) {
-      return 'Hace ${difference.inDays} ${difference.inDays == 1 ? 'día' : 'días'}';
-    } else if (difference.inHours > 0) {
-      return 'Hace ${difference.inHours} ${difference.inHours == 1 ? 'hora' : 'horas'}';
-    } else if (difference.inMinutes > 0) {
-      return 'Hace ${difference.inMinutes} ${difference.inMinutes == 1 ? 'minuto' : 'minutos'}';
+    
+    if (difference.inMinutes < 1) {
+      return 'Ahora';
+    } else if (difference.inMinutes < 60) {
+      return 'Hace ${difference.inMinutes} min';
+    } else if (difference.inHours < 24) {
+      return 'Hace ${difference.inHours} h';
+    } else if (difference.inDays < 7) {
+      return 'Hace ${difference.inDays} días';
     } else {
-      return 'Hace un momento';
+      return DateFormat('dd/MM/yyyy').format(fechaCreacion);
     }
+  }
+
+  bool get isUnread => estado.toLowerCase() == 'pendiente';
+  bool get isRead => estado.toLowerCase() != 'pendiente';
+
+  Notificacion copyWith({
+    int? idNotificacion,
+    String? tipoNotificacion,
+    String? titulo,
+    String? mensaje,
+    String? prioridad,
+    String? estado,
+    DateTime? fechaCreacion,
+    DateTime? fechaVista,
+    DateTime? fechaResuelta,
+    String? tablaReferencia,
+    int? idReferencia,
+    String? nombreUsuario,
+    String? apellidoUsuario,
+  }) {
+    return Notificacion(
+      idNotificacion: idNotificacion ?? this.idNotificacion,
+      tipoNotificacion: tipoNotificacion ?? this.tipoNotificacion,
+      titulo: titulo ?? this.titulo,
+      mensaje: mensaje ?? this.mensaje,
+      prioridad: prioridad ?? this.prioridad,
+      estado: estado ?? this.estado,
+      fechaCreacion: fechaCreacion ?? this.fechaCreacion,
+      fechaVista: fechaVista ?? this.fechaVista,
+      fechaResuelta: fechaResuelta ?? this.fechaResuelta,
+      tablaReferencia: tablaReferencia ?? this.tablaReferencia,
+      idReferencia: idReferencia ?? this.idReferencia,
+      nombreUsuario: nombreUsuario ?? this.nombreUsuario,
+      apellidoUsuario: apellidoUsuario ?? this.apellidoUsuario,
+    );
   }
 }
